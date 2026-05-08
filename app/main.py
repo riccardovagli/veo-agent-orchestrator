@@ -1,8 +1,27 @@
 from fastapi import FastAPI
 from google.cloud import firestore
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
-mcp = FastMCP("Regista-Manager")
+transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=[
+        "localhost:*",
+        "127.0.0.1:*",
+        "veo-agent-orchestrator-841196451446.europe-west1.run.app",
+        "veo-agent-orchestrator-841196451446.europe-west1.run.app:*",
+    ],
+    allowed_origins=[
+        "http://localhost:*",
+        "https://veo-agent-orchestrator-841196451446.europe-west1.run.app",
+        "https://veo-agent-orchestrator-841196451446.europe-west1.run.app:*",
+    ],
+)
+
+mcp = FastMCP(
+    "Regista-Manager",
+    transport_security=transport_security,
+)
 
 
 def get_db():
@@ -42,7 +61,6 @@ async def upsert_graph_node(
         return f"❌ Errore: {str(e)}"
 
 
-# Crea l'app MCP dopo aver registrato i tool
 mcp_app = mcp.streamable_http_app()
 
 app = FastAPI(

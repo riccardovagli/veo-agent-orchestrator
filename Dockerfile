@@ -1,14 +1,14 @@
 FROM python:3.11-slim
 
+# Directory di lavoro nel container
 WORKDIR /app
 
-# Copiamo i requirements
+# Installiamo solo i requirements Python
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Installiamo mcp[fastapi] esplicitamente con le virgolette per evitare errori di shell
-RUN pip install --no-cache-dir fastapi uvicorn google-cloud-firestore "mcp[fastapi]"
+# Copiamo la cartella 'app' locale nella cartella '/app' del container
+COPY app ./app
 
-COPY . .
-
-# Usiamo il formato lista che è più stabile su Cloud Run
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Avvio di uvicorn puntando al file dentro la cartella app
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

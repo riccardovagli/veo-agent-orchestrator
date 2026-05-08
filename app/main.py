@@ -2,18 +2,17 @@ from fastapi import FastAPI
 from google.cloud import firestore
 from mcp.server.fastmcp import FastMCP
 
-PROJECT_ID = "project-df9827fe-fcdb-4e91-83f"
-
 app = FastAPI(title="Veo Agent Orchestrator")
 mcp = FastMCP("Regista-Manager")
 
-
 def get_db():
-    return firestore.Client(project=PROJECT_ID)
-
+    # La libreria rileva automaticamente il progetto GCP 
+    # dall'ambiente Cloud Run. Non serve passare stringhe.
+    return firestore.Client()
 
 @mcp.tool()
 async def upsert_graph_node(
+    project_id: str,
     node_id: str,
     node_type: str,
     content: str,
@@ -23,7 +22,9 @@ async def upsert_graph_node(
     try:
         db = get_db()
 
-        doc_ref = db.collection("agent_orchestration_state").document(PROJECT_ID)
+        # Usa il project_id che arriva dal frontend/agente
+        # per creare il documento in agent_orchestration_state
+        doc_ref = db.collection("agent_orchestration_state").document(project_id)
 
         node_data = {
             "content": content,
@@ -38,25 +39,33 @@ async def upsert_graph_node(
             merge=True,
         )
 
-        return f"✅ Nodo '{node_id}' salvato."
+        return f"✅ Nodo '{node_id}' salvato in '{project_id}'"
 
     except Exception as e:
         return f"❌ Errore: {str(e)}"
-
 
 @app.get("/")
 def health():
     return {"status": "online", "mcp_endpoint": "/mcp"}
 
-
 app.mount("/mcp", mcp.streamable_http_app())
 
 @app.get("/debug-firestore")
-async def debug_firestore():
+async def debug_firestore(project_id: str = "Catnip"): # Passagli un ID che vedi nello screenshot!
     try:
         db = get_db()
-        doc_ref = db.collection("agent_orchestration_state").document(PROJECT_ID)
-        doc_ref.set({"status": "test_funzionante", "timestamp": firestore.SERVER_TIMESTAMP}, merge=True)
-        return {"message": "SCRITTURA RIUSCITA!"}
+        # Ora puntiamo al documento del progetto reale, non all'ID di GCP
+        doc_ref = db.collection("agent_orchestration_state").document(project_id)
+        
+        doc_ref.set({
+            "status": "test_funzionante", 
+            "debug_info": "Test eseguito correttamente",
+            "timestamp": firestore.SERVER_TIMESTAMP
+        }, merge=True)
+        
+        return {
+            "message": f"SCRITTURA RIUSCITA su progetto: {project_id}!",
+            "note": "Controlla ora la collection agent_orchestration_state"
+        }
     except Exception as e:
         return {"error": str(e)}

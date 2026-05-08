@@ -1,6 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 google-cloud-firestore
-mcp
-sse-starlette
+mcp[cli]
 httpx

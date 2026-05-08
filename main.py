@@ -1,8 +1,7 @@
 import os
 from fastapi import FastAPI
 from google.cloud import firestore
-from mcp.server.fastapi import FastApiServer
-from mcp.types import TextContent
+from mcp.server.fastmcp import FastMCP
 
 # Sostituisci con il tuo Project ID se diverso, 
 # ma questo è quello che abbiamo usato finora

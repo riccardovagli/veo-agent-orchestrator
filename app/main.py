@@ -50,3 +50,13 @@ def health():
 
 
 app.mount("/mcp", mcp.streamable_http_app())
+
+@app.get("/debug-firestore")
+async def debug_firestore():
+    try:
+        db = get_db()
+        doc_ref = db.collection("agent_orchestration_state").document(PROJECT_ID)
+        doc_ref.set({"status": "test_funzionante", "timestamp": firestore.SERVER_TIMESTAMP}, merge=True)
+        return {"message": "SCRITTURA RIUSCITA!"}
+    except Exception as e:
+        return {"error": str(e)}

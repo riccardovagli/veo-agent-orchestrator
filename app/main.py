@@ -42,11 +42,12 @@ async def upsert_graph_node(
         return f"❌ Errore: {str(e)}"
 
 
+# Crea l'app MCP dopo aver registrato i tool
 mcp_app = mcp.streamable_http_app()
 
 app = FastAPI(
     title="Veo Agent Orchestrator",
-    lifespan=mcp_app.lifespan,
+    lifespan=mcp_app.router.lifespan_context,
 )
 
 

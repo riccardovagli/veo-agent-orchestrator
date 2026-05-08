@@ -2,10 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Copiamo i requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Installiamo mcp[fastapi] esplicitamente con le virgolette per evitare errori di shell
+RUN pip install --no-cache-dir fastapi uvicorn google-cloud-firestore "mcp[fastapi]"
 
 COPY . .
 
-# Cloud Run passa la porta tramite variabile d'ambiente $PORT (default 8080)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+# Usiamo il formato lista che è più stabile su Cloud Run
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

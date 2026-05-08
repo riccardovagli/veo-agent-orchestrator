@@ -1,4 +1,6 @@
 fastapi
 uvicorn
 google-cloud-firestore
-mcp[fastapi]
+mcp
+sse-starlette
+httpx

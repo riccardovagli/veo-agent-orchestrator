@@ -77,6 +77,17 @@ app = FastAPI(
     lifespan=mcp_app.router.lifespan_context,
 )
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    # Questo scrive nei LOG di Google Cloud il motivo del 422
+    print(f"!!! ERRORE DI VALIDAZIONE RILEVATO: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body}
+    )
 
 @app.get("/")
 def health():

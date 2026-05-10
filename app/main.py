@@ -3,6 +3,15 @@ from google.cloud import firestore
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
+from pydantic import BaseModel
+
+# Definiamo cosa ci arriva dal Backend 1
+class ProcessRequest(BaseModel):
+    project_id: str
+    message: str
+    token: str
+
+
 transport_security = TransportSecuritySettings(
     enable_dns_rebinding_protection=True,
     allowed_hosts=[
@@ -101,5 +110,20 @@ async def debug_firestore(project_id: str = "Catnip"):
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/process")
+async def handle_agent_process(req: ProcessRequest):
+    try:
+        # Per parlare con l'agente FastMCP e fargli generare una risposta
+        # usiamo il metodo .chat() dell'istanza mcp che hai già creato.
+        # Questo avvierà il ragionamento dell'LLM (Claude/Gemini) configurato.
+        
+        result = await mcp.chat(req.message)
+        
+        # FastMCP restituisce un oggetto, noi prendiamo il testo della risposta
+        return {"reply": str(result)} 
+        
+    except Exception as e:
+        print(f"Errore Agent Orchestrator: {e}")
+        return {"reply": f"Il Regista ha avuto un mancamento: {str(e)}"}
 
 app.mount("/", mcp_app)

@@ -375,6 +375,119 @@ async def rename_graph_node(
         return f"❌ Errore rename_graph_node: {str(e)}"
 
 
+@mcp.tool()
+async def prepare_visual_asset_generation(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    node_id: str,
+    asset_type: str,
+    image_prompt: str,
+    aspect_ratio: str = "16:9",
+    model_version: str = "2.5",
+) -> dict:
+    try:
+        print("MCP TOOL CALLED: prepare_visual_asset_generation")
+        print("PROJECT_ID:", project_id)
+        print("USER_ID:", user_id)
+        print("NODE_ID:", node_id)
+        print("ASSET_TYPE:", asset_type)
+
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return {
+                "action": "error",
+                "message": error,
+            }
+
+        if not node_id:
+            return {
+                "action": "error",
+                "message": "node_id mancante",
+            }
+
+        if asset_type not in ["character", "object", "environment"]:
+            return {
+                "action": "error",
+                "message": "asset_type non valido. Usa character, object o environment.",
+            }
+
+        if aspect_ratio not in ["16:9", "9:16", "1:1"]:
+            return {
+                "action": "error",
+                "message": "aspect_ratio non valido. Usa 16:9, 9:16 o 1:1.",
+            }
+
+        if model_version not in ["2.5", "3.1"]:
+            return {
+                "action": "error",
+                "message": "model_version non valido. Usa 2.5 o 3.1.",
+            }
+
+        if not image_prompt or len(image_prompt.strip()) < 20:
+            return {
+                "action": "error",
+                "message": "image_prompt mancante o troppo breve.",
+            }
+
+        db = get_db()
+        doc_ref = db.collection("agent_orchestration_state").document(project_id)
+        snapshot = doc_ref.get()
+
+        if not snapshot.exists:
+            return {
+                "action": "error",
+                "message": f"Progetto '{project_id}' non trovato.",
+            }
+
+        graph_nodes = (snapshot.to_dict() or {}).get("graph_nodes", {})
+
+        if node_id not in graph_nodes:
+            return {
+                "action": "error",
+                "message": f"Nodo '{node_id}' non trovato nel grafo.",
+            }
+
+        node = graph_nodes[node_id]
+
+        if node.get("type") != "Asset":
+            return {
+                "action": "error",
+                "message": f"Il nodo '{node_id}' non è un Asset.",
+            }
+
+        clean_prompt = image_prompt.strip()
+
+        # Salviamo nel grafo il prompt preparato, ma NON generiamo l'immagine qui.
+        doc_ref.update({
+            f"graph_nodes.{node_id}.prepared_image_prompt": clean_prompt,
+            f"graph_nodes.{node_id}.prepared_asset_type": asset_type,
+            f"graph_nodes.{node_id}.prepared_aspect_ratio": aspect_ratio,
+            f"graph_nodes.{node_id}.prepared_model_version": model_version,
+            f"graph_nodes.{node_id}.production_status": "PROMPT_PREPARED",
+            f"graph_nodes.{node_id}.last_updated": firestore.SERVER_TIMESTAMP,
+            f"graph_nodes.{node_id}.updated_by": user_id,
+        })
+
+        print("VISUAL ASSET PROMPT PREPARED:", node_id)
+
+        return {
+            "action": "create_image_asset",
+            "node_id": node_id,
+            "asset_type": asset_type,
+            "prompt": clean_prompt,
+            "aspect_ratio": aspect_ratio,
+            "model_version": model_version,
+        }
+
+    except Exception as e:
+        print("MCP prepare_visual_asset_generation ERROR:", str(e))
+        return {
+            "action": "error",
+            "message": str(e),
+        }
+
+
 mcp_app = mcp.streamable_http_app()
 
 app = FastAPI(

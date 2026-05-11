@@ -5,6 +5,11 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from pydantic import BaseModel
 
+import os
+import hmac
+import hashlib
+
+
 # Definiamo cosa ci arriva dal Backend 1
 class ProcessRequest(BaseModel):
     project_id: str
@@ -36,10 +41,21 @@ mcp = FastMCP(
 def get_db():
     return firestore.Client()
 
+def make_project_context_token(user_id: str, project_id: str) -> str:
+    secret = os.environ["PROJECT_CONTEXT_SECRET"].encode("utf-8")
+    payload = f"{user_id}:{project_id}".encode("utf-8")
+    return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+
+def verify_project_context_token(user_id: str, project_id: str, token: str) -> bool:
+    expected = make_project_context_token(user_id, project_id)
+    return hmac.compare_digest(expected, token)
 
 @mcp.tool()
 async def upsert_graph_node(
     project_id: str,
+    user_id: str,
+    project_context_token: str,
     node_id: str,
     node_type: str,
     content: str,
@@ -47,6 +63,28 @@ async def upsert_graph_node(
     status: str = "VALID",
 ) -> str:
     try:
+        print("MCP TOOL CALLED: upsert_graph_node")
+        print("PROJECT_ID:", project_id)
+        print("USER_ID:", user_id)
+        print("NODE_ID:", node_id)
+        print("NODE_TYPE:", node_type)
+
+        if not project_id:
+            return "❌ Errore: project_id mancante"
+
+        if "/" in project_id:
+            return "❌ Errore: project_id non valido"
+
+        if not user_id:
+            return "❌ Errore: user_id mancante"
+
+        if not project_context_token:
+            return "❌ Errore: project_context_token mancante"
+
+        if not verify_project_context_token(user_id, project_id, project_context_token):
+            print("INVALID PROJECT TOKEN")
+            return "❌ Errore: token progetto non valido"
+
         db = get_db()
 
         doc_ref = db.collection("agent_orchestration_state").document(project_id)
@@ -57,6 +95,7 @@ async def upsert_graph_node(
             "status": status,
             "depends_on": depends_on or [],
             "last_updated": firestore.SERVER_TIMESTAMP,
+            "updated_by": user_id,
         }
 
         doc_ref.set(
@@ -64,10 +103,51 @@ async def upsert_graph_node(
             merge=True,
         )
 
+        print("FIRESTORE WRITE OK:", doc_ref.path)
+
         return f"✅ Nodo '{node_id}' salvato in '{project_id}'"
 
     except Exception as e:
+        print("MCP ERROR:", str(e))
         return f"❌ Errore: {str(e)}"
+
+
+@mcp.tool()
+async def get_graph_state(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+) -> dict:
+    if not verify_project_context_token(user_id, project_id, project_context_token):
+        return {"error": "Invalid project context token"}
+
+    db = get_db()
+    doc = db.collection("agent_orchestration_state").document(project_id).get()
+
+    if not doc.exists:
+        return {"graph_nodes": {}}
+
+    return doc.to_dict().get("graph_nodes", {})
+
+
+@mcp.tool()
+async def delete_graph_node(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    node_id: str,
+) -> str:
+    if not verify_project_context_token(user_id, project_id, project_context_token):
+        return "❌ Errore: token progetto non valido"
+
+    db = get_db()
+    doc_ref = db.collection("agent_orchestration_state").document(project_id)
+
+    doc_ref.update({
+        f"graph_nodes.{node_id}": firestore.DELETE_FIELD
+    })
+
+    return f"✅ Nodo '{node_id}' eliminato"
 
 
 mcp_app = mcp.streamable_http_app()
@@ -138,3 +218,5 @@ async def handle_agent_process(req: ProcessRequest):
         return {"reply": f"Il Regista ha avuto un mancamento: {str(e)}"}
 
 app.mount("/", mcp_app)
+
+

@@ -12,6 +12,7 @@ import hashlib
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from datetime import datetime
 
 # Definiamo cosa ci arriva dal Backend 1
 class ProcessRequest(BaseModel):
@@ -487,12 +488,14 @@ async def prepare_visual_asset_generation(
             "message": str(e),
         }
 
+
+
 @mcp.tool()
 async def get_project_chat_context(
     project_id: str,
     user_id: str,
     project_context_token: str,
-    limit: int = 8,
+    limit: int = 10,
 ) -> dict:
     try:
         print("MCP TOOL CALLED: get_project_chat_context")
@@ -505,10 +508,10 @@ async def get_project_chat_context(
             return {"error": error}
 
         if limit <= 0:
-            limit = 8
+            limit = 10
 
-        if limit > 20:
-            limit = 20
+        if limit > 30:
+            limit = 30
 
         db = get_db()
 
@@ -519,7 +522,7 @@ async def get_project_chat_context(
             .document(project_id)
             .collection("messages")
             .order_by("created_at", direction=firestore.Query.DESCENDING)
-            .limit(limit)
+            .limit(limit * 2)
             .stream()
         )
 
@@ -540,20 +543,39 @@ async def get_project_chat_context(
             messages.append({
                 "role": role,
                 "text": text,
+                "created_at": data.get("created_at"),
+                "turn_created_at": data.get("turn_created_at"),
+                "turn_order": data.get("turn_order", 0),
             })
 
-        messages.reverse()
+        def sort_key(m):
+            # Compatibilità con messaggi vecchi senza turn_created_at
+            base_time = m.get("turn_created_at") or m.get("created_at") or datetime.min
+            return (
+                base_time,
+                m.get("turn_order", 0),
+            )
+
+        messages.sort(key=sort_key)
+
+        # ultimi N messaggi in ordine cronologico
+        messages = messages[-limit:]
 
         return {
             "project_id": project_id,
-            "messages": messages,
+            "messages": [
+                {
+                    "role": m["role"],
+                    "text": m["text"],
+                }
+                for m in messages
+            ],
             "count": len(messages),
         }
 
     except Exception as e:
         print("MCP GET PROJECT CHAT CONTEXT ERROR:", str(e))
         return {"error": str(e)}
-
 
 mcp_app = mcp.streamable_http_app()
 

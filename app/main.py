@@ -500,26 +500,56 @@ async def prepare_visual_asset_edit(
     variant: str | None = None,
 ) -> str:
     try:
+        print("========== MCP prepare_visual_asset_edit START ==========")
+        print("project_id:", project_id)
+        print("user_id:", user_id)
+        print("node_id:", node_id)
+        print("asset_index:", asset_index)
+        print("instruction:", instruction)
+        print("variant:", variant)
+
         error = validate_graph_request(project_id, user_id, project_context_token)
+        print("validate_graph_request error:", error)
+
         if error:
-            return json.dumps({"error": error}, ensure_ascii=False)
+            result = {"error": error}
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
 
         db = get_db()
 
         graph_ref = db.collection("agent_orchestration_state").document(project_id)
         graph_snapshot = graph_ref.get()
 
+        print("graph exists:", graph_snapshot.exists)
+
         if not graph_snapshot.exists:
-            return json.dumps({"error": f"Project graph not found: {project_id}"}, ensure_ascii=False)
+            result = {"error": f"Project graph not found: {project_id}"}
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
 
         graph_data = graph_snapshot.to_dict() or {}
         graph_nodes = graph_data.get("graph_nodes", {})
+
+        print("graph_nodes keys:", list(graph_nodes.keys()))
+
         node = graph_nodes.get(node_id)
+        print("node found:", bool(node))
 
         if not node:
-            return json.dumps({"error": f"Node not found: {node_id}"}, ensure_ascii=False)
+            result = {"error": f"Node not found: {node_id}"}
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
 
         generated_assets = node.get("generated_assets", []) or []
+        print("generated_assets count:", len(generated_assets))
+
+        for a in generated_assets:
+            print("asset candidate:", {
+                "asset_index": a.get("asset_index"),
+                "asset_id": a.get("asset_id"),
+                "asset_type": a.get("asset_type"),
+            })
 
         selected_asset = None
         for asset in generated_assets:
@@ -527,18 +557,26 @@ async def prepare_visual_asset_edit(
                 selected_asset = asset
                 break
 
+        print("selected_asset:", selected_asset)
+
         if not selected_asset:
-            return json.dumps({
+            result = {
                 "error": f"Asset index {asset_index} not found for node {node_id}"
-            }, ensure_ascii=False)
+            }
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
 
         asset_id = selected_asset.get("asset_id")
-        if not asset_id:
-            return json.dumps({
-                "error": f"Asset index {asset_index} for node {node_id} has no asset_id"
-            }, ensure_ascii=False)
+        print("selected asset_id:", asset_id)
 
-        return json.dumps({
+        if not asset_id:
+            result = {
+                "error": f"Asset index {asset_index} for node {node_id} has no asset_id"
+            }
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
+
+        result = {
             "action": "edit_image_asset",
             "node_id": node_id,
             "asset_index": asset_index,
@@ -546,12 +584,17 @@ async def prepare_visual_asset_edit(
             "asset_type": selected_asset.get("asset_type") or node.get("prepared_asset_type"),
             "instruction": instruction,
             "variant": variant,
-        }, ensure_ascii=False)
+        }
+
+        print("prepare_visual_asset_edit RESULT:", result)
+        print("========== MCP prepare_visual_asset_edit END ==========")
+
+        return json.dumps(result, ensure_ascii=False)
 
     except Exception as e:
-        print("MCP PREPARE VISUAL ASSET EDIT ERROR:", str(e))
+        print("========== MCP prepare_visual_asset_edit ERROR ==========")
+        print("ERROR:", str(e))
         return json.dumps({"error": str(e)}, ensure_ascii=False)
-
 
 
 

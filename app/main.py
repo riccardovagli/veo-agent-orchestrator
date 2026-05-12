@@ -487,6 +487,73 @@ async def prepare_visual_asset_generation(
             "message": str(e),
         }
 
+@mcp.tool()
+async def get_project_chat_context(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    limit: int = 8,
+) -> dict:
+    try:
+        print("MCP TOOL CALLED: get_project_chat_context")
+        print("PROJECT_ID:", project_id)
+        print("USER_ID:", user_id)
+        print("LIMIT:", limit)
+
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return {"error": error}
+
+        if limit <= 0:
+            limit = 8
+
+        if limit > 20:
+            limit = 20
+
+        db = get_db()
+
+        docs = (
+            db.collection("agent_chat_sessions")
+            .document(user_id)
+            .collection("projects")
+            .document(project_id)
+            .collection("messages")
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .limit(limit)
+            .stream()
+        )
+
+        messages = []
+
+        for doc in docs:
+            data = doc.to_dict() or {}
+
+            role = data.get("role")
+            text = data.get("text", "")
+
+            if role not in ["user", "agent"]:
+                continue
+
+            if not text:
+                continue
+
+            messages.append({
+                "role": role,
+                "text": text,
+            })
+
+        messages.reverse()
+
+        return {
+            "project_id": project_id,
+            "messages": messages,
+            "count": len(messages),
+        }
+
+    except Exception as e:
+        print("MCP GET PROJECT CHAT CONTEXT ERROR:", str(e))
+        return {"error": str(e)}
+
 
 mcp_app = mcp.streamable_http_app()
 

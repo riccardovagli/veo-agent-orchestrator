@@ -14,6 +14,8 @@ from fastapi.responses import JSONResponse
 
 from datetime import datetime
 
+import json
+
 # Definiamo cosa ci arriva dal Backend 1
 class ProcessRequest(BaseModel):
     project_id: str

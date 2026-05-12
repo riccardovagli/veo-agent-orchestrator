@@ -553,6 +553,13 @@ async def prepare_visual_asset_edit(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+
+
+
+
+
+
+
 @mcp.tool()
 async def get_project_chat_context(
     project_id: str,

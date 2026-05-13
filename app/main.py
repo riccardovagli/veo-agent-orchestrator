@@ -685,6 +685,115 @@ async def prepare_visual_asset_composition(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+@mcp.tool()
+async def prepare_scene_video_generation(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    first_frame_node_id: str,
+    first_frame_asset_index: int,
+    instruction: str,
+    scene_order: int,
+    aspect_ratio: str = "16:9",
+    duration: int = 8,
+    render_mode: str = "veo-3.1-fast-generate-preview",
+    resolution: str = "720p",
+    seed: int = 0,
+    camera_angle: str = "eye-level",
+    camera_movement: str = "slow push-in",
+    lens: str = "standard",
+    lighting: str = "cinematic mysterious light",
+    tone: str = "mysterious",
+    style: str = "cinematic realistic",
+    temporal: str = "normal",
+    environment: str = "",
+    music: str = "none",
+) -> str:
+    try:
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+
+        db = get_db()
+
+        graph_ref = db.collection("agent_orchestration_state").document(project_id)
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps({"error": f"Project graph not found: {project_id}"}, ensure_ascii=False)
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {})
+
+        scene_node = graph_nodes.get(scene_node_id)
+        if not scene_node:
+            return json.dumps({"error": f"Scene node not found: {scene_node_id}"}, ensure_ascii=False)
+
+        first_frame_node = graph_nodes.get(first_frame_node_id)
+        if not first_frame_node:
+            return json.dumps({"error": f"First frame node not found: {first_frame_node_id}"}, ensure_ascii=False)
+
+        generated_assets = first_frame_node.get("generated_assets", []) or []
+
+        selected_asset = None
+        for asset in generated_assets:
+            if int(asset.get("asset_index", -1)) == int(first_frame_asset_index):
+                selected_asset = asset
+                break
+
+        if not selected_asset:
+            return json.dumps({
+                "error": f"First frame asset index {first_frame_asset_index} not found for node {first_frame_node_id}"
+            }, ensure_ascii=False)
+
+        first_frame_asset_id = selected_asset.get("asset_id")
+        if not first_frame_asset_id:
+            return json.dumps({
+                "error": f"First frame asset index {first_frame_asset_index} for node {first_frame_node_id} has no asset_id"
+            }, ensure_ascii=False)
+
+        scene_content = scene_node.get("content", "")
+
+        final_scene_text = instruction.strip()
+        if scene_content:
+            final_scene_text = f"{scene_content}\n\nVideo direction: {instruction.strip()}"
+
+        result = {
+            "action": "create_video_scene",
+            "scene_node_id": scene_node_id,
+            "scene_order": scene_order,
+            "scene": final_scene_text,
+
+            "first_frame_node_id": first_frame_node_id,
+            "first_frame_asset_index": first_frame_asset_index,
+            "first_frame_asset_id": first_frame_asset_id,
+
+            "last_frame_asset_id": None,
+            "reference_asset_ids": [],
+
+            "camera_angle": camera_angle,
+            "camera_movement": camera_movement,
+            "lens": lens,
+            "lighting": lighting,
+            "tone": tone,
+            "style": style,
+            "temporal": temporal,
+            "environment": environment,
+            "music": music,
+            "duration": duration,
+            "render_mode": render_mode,
+            "aspect_ratio": aspect_ratio,
+            "seed": seed,
+            "resolution": resolution,
+        }
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        print("MCP PREPARE SCENE VIDEO GENERATION ERROR:", str(e))
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
 
 
 

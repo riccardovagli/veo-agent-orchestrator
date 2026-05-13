@@ -697,7 +697,7 @@ async def prepare_scene_video_generation(
     scene_order: int,
     aspect_ratio: str = "16:9",
     duration: int = 8,
-    render_mode: str = "veo-3.1-fast-generate-preview",
+    render_mode: str = "preview",
     resolution: str = "720p",
     seed: int = 0,
     camera_angle: str = "eye-level",

@@ -698,7 +698,7 @@ async def prepare_scene_video_generation(
     aspect_ratio: str = "16:9",
     duration: int = 8,
     render_mode: str = "preview",
-    resolution: str = "720p",
+    resolution: str = "1080p",
     seed: int = 0,
     camera_angle: str = "eye-level",
     camera_movement: str = "slow push-in",

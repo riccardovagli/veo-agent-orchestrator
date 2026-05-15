@@ -695,6 +695,11 @@ async def prepare_scene_video_generation(
     first_frame_asset_index: int,
     instruction: str,
     scene_order: int,
+
+    # nuovo: frame finale opzionale
+    last_frame_node_id: str | None = None,
+    last_frame_asset_index: int | None = None,
+
     aspect_ratio: str = "16:9",
     duration: int = 8,
     render_mode: str = "preview",
@@ -730,28 +735,62 @@ async def prepare_scene_video_generation(
         if not scene_node:
             return json.dumps({"error": f"Scene node not found: {scene_node_id}"}, ensure_ascii=False)
 
-        first_frame_node = graph_nodes.get(first_frame_node_id)
-        if not first_frame_node:
-            return json.dumps({"error": f"First frame node not found: {first_frame_node_id}"}, ensure_ascii=False)
+        def resolve_asset_id(node_id: str, asset_index: int, label: str) -> str | None:
+            node = graph_nodes.get(node_id)
+            if not node:
+                raise ValueError(f"{label} node not found: {node_id}")
 
-        generated_assets = first_frame_node.get("generated_assets", []) or []
+            generated_assets = node.get("generated_assets", []) or []
 
-        selected_asset = None
-        for asset in generated_assets:
-            if int(asset.get("asset_index", -1)) == int(first_frame_asset_index):
-                selected_asset = asset
-                break
+            selected_asset = None
+            for asset in generated_assets:
+                if int(asset.get("asset_index", -1)) == int(asset_index):
+                    selected_asset = asset
+                    break
 
-        if not selected_asset:
-            return json.dumps({
-                "error": f"First frame asset index {first_frame_asset_index} not found for node {first_frame_node_id}"
-            }, ensure_ascii=False)
+            if not selected_asset:
+                raise ValueError(
+                    f"{label} asset index {asset_index} not found for node {node_id}"
+                )
 
-        first_frame_asset_id = selected_asset.get("asset_id")
-        if not first_frame_asset_id:
-            return json.dumps({
-                "error": f"First frame asset index {first_frame_asset_index} for node {first_frame_node_id} has no asset_id"
-            }, ensure_ascii=False)
+            asset_id = selected_asset.get("asset_id")
+            if not asset_id:
+                raise ValueError(
+                    f"{label} asset index {asset_index} for node {node_id} has no asset_id"
+                )
+
+            return asset_id
+
+        try:
+            first_frame_asset_id = resolve_asset_id(
+                first_frame_node_id,
+                first_frame_asset_index,
+                "First frame"
+            )
+        except ValueError as e:
+            return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+        last_frame_asset_id = None
+
+        if last_frame_node_id is not None or last_frame_asset_index is not None:
+            if last_frame_node_id is None:
+                return json.dumps({
+                    "error": "last_frame_node_id is required when last_frame_asset_index is provided"
+                }, ensure_ascii=False)
+
+            if last_frame_asset_index is None:
+                return json.dumps({
+                    "error": "last_frame_asset_index is required when last_frame_node_id is provided"
+                }, ensure_ascii=False)
+
+            try:
+                last_frame_asset_id = resolve_asset_id(
+                    last_frame_node_id,
+                    last_frame_asset_index,
+                    "Last frame"
+                )
+            except ValueError as e:
+                return json.dumps({"error": str(e)}, ensure_ascii=False)
 
         scene_content = scene_node.get("content", "")
 
@@ -769,7 +808,10 @@ async def prepare_scene_video_generation(
             "first_frame_asset_index": first_frame_asset_index,
             "first_frame_asset_id": first_frame_asset_id,
 
-            "last_frame_asset_id": None,
+            "last_frame_node_id": last_frame_node_id,
+            "last_frame_asset_index": last_frame_asset_index,
+            "last_frame_asset_id": last_frame_asset_id,
+
             "reference_asset_ids": [],
 
             "camera_angle": camera_angle,
@@ -793,7 +835,6 @@ async def prepare_scene_video_generation(
     except Exception as e:
         print("MCP PREPARE SCENE VIDEO GENERATION ERROR:", str(e))
         return json.dumps({"error": str(e)}, ensure_ascii=False)
-
 
 
 

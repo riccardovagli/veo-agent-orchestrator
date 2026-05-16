@@ -837,6 +837,114 @@ async def prepare_scene_video_generation(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+@mcp.tool()
+async def prepare_video_frame_extraction(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    frame: str = "last",  # first | last | current
+    timestamp: float | None = None,
+    job_id: str | None = None,
+    variant: str | None = None,
+) -> str:
+    try:
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+
+        if frame not in ["first", "last", "current"]:
+            return json.dumps({
+                "error": f"Invalid frame type: {frame}. Expected first, last or current."
+            }, ensure_ascii=False)
+
+        if frame == "current" and timestamp is None:
+            return json.dumps({
+                "error": "timestamp is required when frame is current"
+            }, ensure_ascii=False)
+
+        db = get_db()
+
+        graph_ref = db.collection("agent_orchestration_state").document(project_id)
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps({
+                "error": f"Project graph not found: {project_id}"
+            }, ensure_ascii=False)
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {})
+
+        scene_node = graph_nodes.get(scene_node_id)
+        if not scene_node:
+            return json.dumps({
+                "error": f"Scene node not found: {scene_node_id}"
+            }, ensure_ascii=False)
+
+        resolved_job_id = job_id
+
+        if not resolved_job_id:
+            resolved_job_id = scene_node.get("last_video_job_id")
+
+        if not resolved_job_id:
+            video_jobs = scene_node.get("video_jobs", []) or []
+
+            # Preferisci l’ultimo job completato, se lo trovi nel grafo.
+            completed_jobs = [
+                j for j in video_jobs
+                if j.get("job_id") and j.get("status") in ["COMPLETED", "VIDEO_CREATED"]
+            ]
+
+            if completed_jobs:
+                resolved_job_id = completed_jobs[-1].get("job_id")
+            elif video_jobs:
+                # Fallback: ultimo job registrato.
+                resolved_job_id = video_jobs[-1].get("job_id")
+
+        if not resolved_job_id:
+            return json.dumps({
+                "error": f"No video job found for scene node: {scene_node_id}"
+            }, ensure_ascii=False)
+
+        # Controllo leggero su video_jobs/{job_id}, così evitiamo di preparare
+        # un’estrazione da un job inesistente o non completato.
+        job_doc = db.collection("video_jobs").document(resolved_job_id).get()
+
+        if not job_doc.exists:
+            return json.dumps({
+                "error": f"Video job not found: {resolved_job_id}"
+            }, ensure_ascii=False)
+
+        job_data = job_doc.to_dict() or {}
+        job_status = job_data.get("status")
+
+        if job_status != "COMPLETED":
+            return json.dumps({
+                "error": f"Video job is not completed: {resolved_job_id} has status {job_status}"
+            }, ensure_ascii=False)
+
+        output = job_data.get("output") or {}
+        if not output.get("gcs_uri"):
+            return json.dumps({
+                "error": f"Video job has no output gcs_uri: {resolved_job_id}"
+            }, ensure_ascii=False)
+
+        result = {
+            "action": "extract_video_frame",
+            "scene_node_id": scene_node_id,
+            "job_id": resolved_job_id,
+            "frame": frame,
+            "timestamp": timestamp if frame == "current" else None,
+            "variant": variant,
+        }
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        print("MCP PREPARE VIDEO FRAME EXTRACTION ERROR:", str(e))
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
 
 @mcp.tool()
 async def get_project_chat_context(

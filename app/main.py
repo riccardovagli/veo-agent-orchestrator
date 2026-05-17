@@ -793,11 +793,13 @@ async def prepare_scene_video_generation(
             except ValueError as e:
                 return json.dumps({"error": str(e)}, ensure_ascii=False)
 
-        scene_content = scene_node.get("content", "")
+        #scene_content = scene_node.get("content", "")
 
+        #final_scene_text = instruction.strip()
+        #if scene_content:
+        #    final_scene_text = f"{scene_content}\n\nVideo direction: {instruction.strip()}"
+        
         final_scene_text = instruction.strip()
-        if scene_content:
-            final_scene_text = f"{scene_content}\n\nVideo direction: {instruction.strip()}"
 
         result = {
             "action": "create_video_scene",

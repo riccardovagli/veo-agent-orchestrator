@@ -685,6 +685,7 @@ async def prepare_visual_asset_composition(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+
 @mcp.tool()
 async def prepare_scene_video_generation(
     project_id: str,

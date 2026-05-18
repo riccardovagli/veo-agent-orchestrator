@@ -1060,7 +1060,7 @@ async def validation_exception_handler(request, exc):
 def health():
     return {
         "status": "online",
-        "mcp_endpoint": "/mcp",
+        "mcp_endpoint": "/sse",
     }
 
 

@@ -1036,8 +1036,8 @@ async def get_project_chat_context(
         print("MCP GET PROJECT CHAT CONTEXT ERROR:", str(e))
         return {"error": str(e)}
 
-#mcp_app = mcp.streamable_http_app()
-mcp_app = mcp.sse_app()
+mcp_app = mcp.streamable_http_app()
+#mcp_app = mcp.sse_app()
 
 app = FastAPI(
     title="Regista-Orchestratore-Svisceratore",
@@ -1060,7 +1060,7 @@ async def validation_exception_handler(request, exc):
 def health():
     return {
         "status": "online",
-        "mcp_endpoint": "/sse",
+        "mcp_endpoint": "/mcp",
     }
 
 

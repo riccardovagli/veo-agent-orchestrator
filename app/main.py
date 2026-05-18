@@ -1106,7 +1106,7 @@ async def handle_agent_process(req: ProcessRequest):
 
 
 
-app.mount("/mcp", mcp_app)
+app.mount("/", mcp_app)
 
 
 

@@ -1036,10 +1036,11 @@ async def get_project_chat_context(
         print("MCP GET PROJECT CHAT CONTEXT ERROR:", str(e))
         return {"error": str(e)}
 
-mcp_app = mcp.streamable_http_app()
+#mcp_app = mcp.streamable_http_app()
+mcp_app = mcp.sse_app()
 
 app = FastAPI(
-    title="Veo Agent Orchestrator",
+    title="Regista-Orchestratore-Svisceratore",
     lifespan=mcp_app.router.lifespan_context,
 )
 

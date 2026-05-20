@@ -604,11 +604,10 @@ async def prepare_visual_asset_composition(
     project_id: str,
     user_id: str,
     project_context_token: str,
-    source_node_id: str,
-    source_asset_index: int,
-    target_node_id: str,
-    target_asset_index: int,
+    asset_node_ids: list[str],
+    asset_indexes: list[int],
     instruction: str,
+    node_id: str | None = None,
     variant: str | None = None,
 ) -> str:
     try:
@@ -616,74 +615,81 @@ async def prepare_visual_asset_composition(
         if error:
             return json.dumps({"error": error}, ensure_ascii=False)
 
+        if not asset_node_ids or not asset_indexes:
+            return json.dumps({
+                "error": "asset_node_ids and asset_indexes are required"
+            }, ensure_ascii=False)
+
+        if len(asset_node_ids) != len(asset_indexes):
+            return json.dumps({
+                "error": "asset_node_ids and asset_indexes must have the same length"
+            }, ensure_ascii=False)
+
+        if len(asset_node_ids) < 2:
+            return json.dumps({
+                "error": "At least 2 assets are required for composition"
+            }, ensure_ascii=False)
+
         db = get_db()
         graph_ref = db.collection("agent_orchestration_state").document(project_id)
         graph_snapshot = graph_ref.get()
 
         if not graph_snapshot.exists:
-            return json.dumps({"error": f"Project graph not found: {project_id}"}, ensure_ascii=False)
+            return json.dumps({
+                "error": f"Project graph not found: {project_id}"
+            }, ensure_ascii=False)
 
         graph_data = graph_snapshot.to_dict() or {}
         graph_nodes = graph_data.get("graph_nodes", {})
 
-        source_node = graph_nodes.get(source_node_id)
-        target_node = graph_nodes.get(target_node_id)
-
-        if not source_node:
-            return json.dumps({"error": f"Source node not found: {source_node_id}"}, ensure_ascii=False)
-
-        if not target_node:
-            return json.dumps({"error": f"Target node not found: {target_node_id}"}, ensure_ascii=False)
-
-        def resolve_asset(node, node_id, asset_index):
+        def resolve_asset(node, asset_index):
             generated_assets = node.get("generated_assets", []) or []
             for asset in generated_assets:
                 if int(asset.get("asset_index", -1)) == int(asset_index):
                     return asset
             return None
 
-        source_asset = resolve_asset(source_node, source_node_id, source_asset_index)
-        target_asset = resolve_asset(target_node, target_node_id, target_asset_index)
+        resolved_assets = []
 
-        if not source_asset:
-            return json.dumps({
-                "error": f"Source asset index {source_asset_index} not found for node {source_node_id}"
-            }, ensure_ascii=False)
+        for asset_node_id, asset_index in zip(asset_node_ids, asset_indexes):
+            node = graph_nodes.get(asset_node_id)
 
-        if not target_asset:
-            return json.dumps({
-                "error": f"Target asset index {target_asset_index} not found for node {target_node_id}"
-            }, ensure_ascii=False)
+            if not node:
+                return json.dumps({
+                    "error": f"Node not found: {asset_node_id}"
+                }, ensure_ascii=False)
 
-        source_asset_id = source_asset.get("asset_id")
-        target_asset_id = target_asset.get("asset_id")
+            asset = resolve_asset(node, asset_index)
 
-        if not source_asset_id:
-            return json.dumps({
-                "error": f"Source asset index {source_asset_index} for node {source_node_id} has no asset_id"
-            }, ensure_ascii=False)
+            if not asset:
+                return json.dumps({
+                    "error": f"Asset index {asset_index} not found for node {asset_node_id}"
+                }, ensure_ascii=False)
 
-        if not target_asset_id:
-            return json.dumps({
-                "error": f"Target asset index {target_asset_index} for node {target_node_id} has no asset_id"
-            }, ensure_ascii=False)
+            asset_id = asset.get("asset_id")
+            if not asset_id:
+                return json.dumps({
+                    "error": f"Asset index {asset_index} for node {asset_node_id} has no asset_id"
+                }, ensure_ascii=False)
+
+            resolved_assets.append({
+                "node_id": asset_node_id,
+                "asset_index": asset_index,
+                "asset_id": asset_id,
+                "asset_type": asset.get("asset_type") or node.get("prepared_asset_type"),
+            })
 
         return json.dumps({
             "action": "compose_assets",
-            "source_node_id": source_node_id,
-            "source_asset_index": source_asset_index,
-            "source_asset_id": source_asset_id,
-            "target_node_id": target_node_id,
-            "target_asset_index": target_asset_index,
-            "target_asset_id": target_asset_id,
-            "asset_type": target_asset.get("asset_type") or target_node.get("prepared_asset_type"),
+            "node_id": node_id,
+            "asset_ids": [a["asset_id"] for a in resolved_assets],
+            "assets": resolved_assets,
             "instruction": instruction,
             "variant": variant,
         }, ensure_ascii=False)
 
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
-
 
 
 @mcp.tool()

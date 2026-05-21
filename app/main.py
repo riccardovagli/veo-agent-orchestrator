@@ -1058,6 +1058,71 @@ async def get_project_chat_context(
         print("MCP GET PROJECT CHAT CONTEXT ERROR:", str(e))
         return {"error": str(e)}
 
+
+@mcp.tool()
+async def prepare_visual_asset_deletion(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    node_id: str,
+    asset_index: int,
+) -> str:
+    try:
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+
+        db = get_db()
+        graph_ref = db.collection("agent_orchestration_state").document(project_id)
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps({
+                "error": f"Project graph not found: {project_id}"
+            }, ensure_ascii=False)
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {}) or {}
+
+        node = graph_nodes.get(node_id)
+
+        if not node:
+            return json.dumps({
+                "error": f"Node not found: {node_id}"
+            }, ensure_ascii=False)
+
+        generated_assets = node.get("generated_assets", []) or []
+
+        selected_asset = None
+
+        for asset in generated_assets:
+            if int(asset.get("asset_index", -1)) == int(asset_index):
+                selected_asset = asset
+                break
+
+        if not selected_asset:
+            return json.dumps({
+                "error": f"Asset index {asset_index} not found for node {node_id}"
+            }, ensure_ascii=False)
+
+        asset_id = selected_asset.get("asset_id")
+
+        if not asset_id:
+            return json.dumps({
+                "error": f"Asset index {asset_index} for node {node_id} has no asset_id"
+            }, ensure_ascii=False)
+
+        return json.dumps({
+            "action": "delete_asset",
+            "node_id": node_id,
+            "asset_index": asset_index,
+            "asset_id": asset_id,
+        }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 mcp_app = mcp.streamable_http_app()
 #mcp_app = mcp.sse_app()
 

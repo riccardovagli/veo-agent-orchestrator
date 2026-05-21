@@ -70,7 +70,23 @@ def validate_graph_request(project_id: str, user_id: str, project_context_token:
     if not project_context_token:
         return "❌ Errore: project_context_token mancante"
 
-    if not verify_project_context_token(user_id, project_id, project_context_token):
+    #if not verify_project_context_token(user_id, project_id, project_context_token):
+    #    return "❌ Errore: token progetto non valido"
+
+    expected = make_project_context_token(user_id, project_id)
+    token_ok = hmac.compare_digest(expected, project_context_token)
+
+    if not token_ok:
+        print("========== PROJECT CONTEXT TOKEN MISMATCH ==========")
+        print("project_id:", repr(project_id))
+        print("user_id:", repr(user_id))
+        print("received_token_len:", len(project_context_token or ""))
+        print("expected_token_len:", len(expected or ""))
+        print("received_token_prefix:", repr((project_context_token or "")[:10]))
+        print("expected_token_prefix:", repr((expected or "")[:10]))
+        print("received_token_suffix:", repr((project_context_token or "")[-10:]))
+        print("expected_token_suffix:", repr((expected or "")[-10:]))
+        print("====================================================")
         return "❌ Errore: token progetto non valido"
 
     return None

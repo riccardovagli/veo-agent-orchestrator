@@ -972,6 +972,146 @@ async def prepare_video_frame_extraction(
 
 
 @mcp.tool()
+async def prepare_scene_video_deletion(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str | None = None,
+    scene_order: int | None = None,
+    job_id: str | None = None,
+) -> str:
+    try:
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+
+        db = get_db()
+
+        # Caso 1: job_id già noto
+        if job_id:
+            job_doc = db.collection("video_jobs").document(job_id).get()
+
+            if not job_doc.exists:
+                return json.dumps({
+                    "error": f"Video job not found: {job_id}"
+                }, ensure_ascii=False)
+
+            job_data = job_doc.to_dict() or {}
+
+            if job_data.get("project_id") != project_id:
+                return json.dumps({
+                    "error": f"Video job {job_id} does not belong to project {project_id}"
+                }, ensure_ascii=False)
+
+            return json.dumps({
+                "action": "delete_video_scene",
+                "job_id": job_id,
+                "scene_node_id": job_data.get("node_id"),
+                "scene_order": job_data.get("scene_order"),
+            }, ensure_ascii=False)
+
+        graph_ref = db.collection("agent_orchestration_state").document(project_id)
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps({
+                "error": f"Project graph not found: {project_id}"
+            }, ensure_ascii=False)
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {}) or {}
+
+        # Caso 2: scene_node_id + eventuale scene_order
+        if scene_node_id:
+            node = graph_nodes.get(scene_node_id)
+
+            if not node:
+                return json.dumps({
+                    "error": f"Scene node not found: {scene_node_id}"
+                }, ensure_ascii=False)
+
+            video_jobs = node.get("video_jobs", []) or []
+
+            if not video_jobs:
+                return json.dumps({
+                    "error": f"No video jobs found for scene node {scene_node_id}"
+                }, ensure_ascii=False)
+
+            selected_job = None
+
+            if scene_order is not None:
+                for video_job in video_jobs:
+                    if int(video_job.get("scene_order", -1)) == int(scene_order):
+                        selected_job = video_job
+                        break
+            else:
+                if len(video_jobs) == 1:
+                    selected_job = video_jobs[0]
+                else:
+                    return json.dumps({
+                        "error": f"Multiple video jobs found for scene node {scene_node_id}; specify scene_order"
+                    }, ensure_ascii=False)
+
+            if not selected_job:
+                return json.dumps({
+                    "error": f"Scene order {scene_order} not found for scene node {scene_node_id}"
+                }, ensure_ascii=False)
+
+            resolved_job_id = selected_job.get("job_id")
+
+            if not resolved_job_id:
+                return json.dumps({
+                    "error": f"Selected video job for scene node {scene_node_id} has no job_id"
+                }, ensure_ascii=False)
+
+            return json.dumps({
+                "action": "delete_video_scene",
+                "job_id": resolved_job_id,
+                "scene_node_id": scene_node_id,
+                "scene_order": selected_job.get("scene_order"),
+            }, ensure_ascii=False)
+
+        # Caso 3: solo scene_order, cerca nei video_jobs reali
+        if scene_order is not None:
+            docs = (
+                db.collection("video_jobs")
+                .where("project_id", "==", project_id)
+                .where("scene_order", "==", scene_order)
+                .limit(2)
+                .stream()
+            )
+
+            matches = list(docs)
+
+            if not matches:
+                return json.dumps({
+                    "error": f"No video job found with scene_order {scene_order}"
+                }, ensure_ascii=False)
+
+            if len(matches) > 1:
+                return json.dumps({
+                    "error": f"Multiple video jobs found with scene_order {scene_order}"
+                }, ensure_ascii=False)
+
+            job_doc = matches[0]
+            job_data = job_doc.to_dict() or {}
+
+            return json.dumps({
+                "action": "delete_video_scene",
+                "job_id": job_doc.id,
+                "scene_node_id": job_data.get("node_id"),
+                "scene_order": job_data.get("scene_order"),
+            }, ensure_ascii=False)
+
+        return json.dumps({
+            "error": "Provide job_id, scene_node_id, or scene_order"
+        }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
+@mcp.tool()
 async def get_project_chat_context(
     project_id: str,
     user_id: str,

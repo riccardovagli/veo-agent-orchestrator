@@ -403,7 +403,7 @@ async def prepare_visual_asset_generation(
     asset_type: str,
     image_prompt: str,
     aspect_ratio: str = "16:9",
-    model_version: str = "2.5",
+    model_version: str = "3.1",
 ) -> dict:
     try:
         print("MCP TOOL CALLED: prepare_visual_asset_generation")

@@ -1338,3 +1338,10 @@ app.mount("/", mcp_app)
 
 
 
+print("===== MAIN APP ROUTES =====")
+for route in app.routes:
+    print(route)
+
+print("===== MCP APP ROUTES =====")
+for route in getattr(mcp_app, "routes", []):
+    print(route)

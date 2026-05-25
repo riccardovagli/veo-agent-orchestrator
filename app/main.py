@@ -77,16 +77,19 @@ def validate_graph_request(project_id: str, user_id: str, project_context_token:
     token_ok = hmac.compare_digest(expected, project_context_token)
 
     if not token_ok:
-        print("========== PROJECT CONTEXT TOKEN MISMATCH ==========")
-        print("project_id:", repr(project_id))
-        print("user_id:", repr(user_id))
-        print("received_token_len:", len(project_context_token or ""))
-        print("expected_token_len:", len(expected or ""))
-        print("received_token_prefix:", repr((project_context_token or "")[:10]))
-        print("expected_token_prefix:", repr((expected or "")[:10]))
-        print("received_token_suffix:", repr((project_context_token or "")[-10:]))
-        print("expected_token_suffix:", repr((expected or "")[-10:]))
-        print("====================================================")
+        print("========== MCP PROJECT TOKEN MISMATCH ==========")
+        print("project_id repr:", repr(project_id))
+        print("project_id hash:", short_hash(project_id))
+        print("user_id repr:", repr(user_id))
+        print("user_id hash:", short_hash(user_id))
+        print("secret hash:", short_hash(os.environ.get("PROJECT_CONTEXT_SECRET")))
+        print("received token prefix:", project_context_token[:12])
+        print("received token suffix:", project_context_token[-12:])
+        print("received token len:", len(project_context_token))
+        print("expected token prefix:", expected[:12])
+        print("expected token suffix:", expected[-12:])
+        print("expected token len:", len(expected))
+        print("================================================")
         return "❌ Errore: token progetto non valido"
 
     return None

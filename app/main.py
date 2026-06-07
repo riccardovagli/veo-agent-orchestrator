@@ -28,13 +28,13 @@ transport_security = TransportSecuritySettings(
     allowed_hosts=[
         "localhost:*",
         "127.0.0.1:*",
-        "veo-agent-orchestrator-841196451446.europe-west1.run.app",
-        "veo-agent-orchestrator-841196451446.europe-west1.run.app:*",
+        "veo-agent-orchestrator-420815690871.europe-west1.run.app",
+        "veo-agent-orchestrator-420815690871.europe-west1.run.app:*",
     ],
     allowed_origins=[
         "http://localhost:*",
-        "https://veo-agent-orchestrator-841196451446.europe-west1.run.app",
-        "https://veo-agent-orchestrator-841196451446.europe-west1.run.app:*",
+        "https://veo-agent-orchestrator-420815690871.europe-west1.run.app",
+        "https://veo-agent-orchestrator-420815690871.europe-west1.run.app:*",
     ],
 )
 
@@ -56,6 +56,11 @@ def make_project_context_token(user_id: str, project_id: str) -> str:
 def verify_project_context_token(user_id: str, project_id: str, token: str) -> bool:
     expected = make_project_context_token(user_id, project_id)
     return hmac.compare_digest(expected, token)
+
+def short_hash(value: str | None) -> str:
+    if value is None:
+        return "NONE"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 def validate_graph_request(project_id: str, user_id: str, project_context_token: str) -> str | None:
     if not project_id:

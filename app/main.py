@@ -1010,6 +1010,262 @@ async def prepare_scene_video_generation(
 
 
 @mcp.tool()
+async def prepare_scene_video_generation_from_references(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    instruction: str,
+    scene_order: int,
+
+    # Reference image 1
+    reference_1_node_id: str | None = None,
+    reference_1_asset_index: int | None = None,
+    reference_1_role: str = "reference",
+
+    # Reference image 2
+    reference_2_node_id: str | None = None,
+    reference_2_asset_index: int | None = None,
+    reference_2_role: str = "reference",
+
+    # Reference image 3
+    reference_3_node_id: str | None = None,
+    reference_3_asset_index: int | None = None,
+    reference_3_role: str = "reference",
+
+    aspect_ratio: str = "16:9",
+    duration: int = 8,
+    render_mode: str = "preview",
+    resolution: str = "1080p",
+    seed: int = 0,
+    camera_angle: str = "eye-level",
+    camera_movement: str = "slow push-in",
+    lens: str = "standard",
+    lighting: str = "cinematic mysterious light",
+    tone: str = "mysterious",
+    style: str = "cinematic realistic",
+    temporal: str = "normal",
+    environment: str = "",
+    music: str = "none",
+) -> str:
+    """
+    Prepare a video scene generation action using reference images.
+
+    Use this tool when the user wants to create a video scene using one or more
+    existing generated images as visual references.
+
+    Reference images can guide:
+    - character appearance
+    - environment appearance
+    - object appearance
+    - visual style
+    - composition
+    - general look and feel
+
+    This tool is ONLY for reference-image-based video generation.
+
+    Do NOT use this tool for:
+    - first-frame video generation
+    - first-and-last-frame video generation
+
+    At least one reference image is required.
+    Up to three reference images are supported.
+    Each reference image must specify both node id and asset index.
+    """
+    try:
+        error = validate_graph_request(project_id, user_id, project_context_token)
+        if error:
+            return json.dumps({"error": error}, ensure_ascii=False)
+
+        db = get_db()
+
+        graph_ref = db.collection("agent_orchestration_state").document(project_id)
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps(
+                {"error": f"Project graph not found: {project_id}"},
+                ensure_ascii=False
+            )
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {})
+
+        scene_node = graph_nodes.get(scene_node_id)
+        if not scene_node:
+            return json.dumps(
+                {"error": f"Scene node not found: {scene_node_id}"},
+                ensure_ascii=False
+            )
+
+        def resolve_asset_id(node_id: str, asset_index: int, label: str) -> str:
+            node = graph_nodes.get(node_id)
+            if not node:
+                raise ValueError(f"{label} node not found: {node_id}")
+
+            generated_assets = node.get("generated_assets", []) or []
+
+            selected_asset = None
+            for asset in generated_assets:
+                if int(asset.get("asset_index", -1)) == int(asset_index):
+                    selected_asset = asset
+                    break
+
+            if not selected_asset:
+                raise ValueError(
+                    f"{label} asset index {asset_index} not found for node {node_id}"
+                )
+
+            asset_id = selected_asset.get("asset_id")
+            if not asset_id:
+                raise ValueError(
+                    f"{label} asset index {asset_index} for node {node_id} has no asset_id"
+                )
+
+            return asset_id
+
+        def validate_reference_slot(
+            slot_number: int,
+            node_id: str | None,
+            asset_index: int | None,
+            role: str | None,
+        ) -> dict | None:
+            label = f"Reference {slot_number}"
+
+            if node_id is None and asset_index is None:
+                return None
+
+            if node_id is None:
+                raise ValueError(
+                    f"reference_{slot_number}_node_id is required when "
+                    f"reference_{slot_number}_asset_index is provided"
+                )
+
+            if asset_index is None:
+                raise ValueError(
+                    f"reference_{slot_number}_asset_index is required when "
+                    f"reference_{slot_number}_node_id is provided"
+                )
+
+            asset_id = resolve_asset_id(node_id, asset_index, label)
+
+            clean_role = (role or "reference").strip()
+            if not clean_role:
+                clean_role = "reference"
+
+            return {
+                "node_id": node_id,
+                "asset_index": asset_index,
+                "asset_id": asset_id,
+                "role": clean_role,
+            }
+
+        try:
+            reference_assets = []
+
+            for ref in [
+                validate_reference_slot(
+                    1,
+                    reference_1_node_id,
+                    reference_1_asset_index,
+                    reference_1_role,
+                ),
+                validate_reference_slot(
+                    2,
+                    reference_2_node_id,
+                    reference_2_asset_index,
+                    reference_2_role,
+                ),
+                validate_reference_slot(
+                    3,
+                    reference_3_node_id,
+                    reference_3_asset_index,
+                    reference_3_role,
+                ),
+            ]:
+                if ref:
+                    reference_assets.append(ref)
+
+        except ValueError as e:
+            return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+        if not reference_assets:
+            return json.dumps(
+                {"error": "At least one reference image is required"},
+                ensure_ascii=False
+            )
+
+        reference_asset_ids = [ref["asset_id"] for ref in reference_assets]
+
+        duplicated_asset_ids = {
+            asset_id
+            for asset_id in reference_asset_ids
+            if reference_asset_ids.count(asset_id) > 1
+        }
+
+        if duplicated_asset_ids:
+            return json.dumps(
+                {
+                    "error": (
+                        "Duplicate reference asset ids are not allowed: "
+                        + ", ".join(sorted(duplicated_asset_ids))
+                    )
+                },
+                ensure_ascii=False
+            )
+
+        final_scene_text = instruction.strip()
+
+        if not final_scene_text:
+            return json.dumps(
+                {"error": "instruction is required"},
+                ensure_ascii=False
+            )
+
+        result = {
+            "action": "create_video_scene",
+            "video_generation_mode": "references",
+
+            "scene_node_id": scene_node_id,
+            "scene_order": scene_order,
+            "scene": final_scene_text,
+
+            # Questa modalità NON usa first/last frame.
+            "first_frame_node_id": None,
+            "first_frame_asset_index": None,
+            "first_frame_asset_id": None,
+
+            "last_frame_node_id": None,
+            "last_frame_asset_index": None,
+            "last_frame_asset_id": None,
+
+            # Reference images vere.
+            "reference_assets": reference_assets,
+            "reference_asset_ids": reference_asset_ids,
+
+            "camera_angle": camera_angle,
+            "camera_movement": camera_movement,
+            "lens": lens,
+            "lighting": lighting,
+            "tone": tone,
+            "style": style,
+            "temporal": temporal,
+            "environment": environment,
+            "music": music,
+            "duration": duration,
+            "render_mode": render_mode,
+            "aspect_ratio": aspect_ratio,
+            "seed": seed,
+            "resolution": resolution,
+        }
+
+        return json.dumps(result, ensure_ascii=False)
+
+    except Exception as e:
+        print("MCP PREPARE SCENE VIDEO GENERATION FROM REFERENCES ERROR:", str(e))
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+@mcp.tool()
 async def prepare_video_frame_extraction(
     project_id: str,
     user_id: str,

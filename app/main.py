@@ -1223,23 +1223,12 @@ async def prepare_scene_video_generation_from_references(
             )
 
         result = {
-            "action": "create_video_scene",
-            "video_generation_mode": "references",
+            "action": "create_video_scene_from_references",
 
             "scene_node_id": scene_node_id,
             "scene_order": scene_order,
             "scene": final_scene_text,
 
-            # Questa modalità NON usa first/last frame.
-            "first_frame_node_id": None,
-            "first_frame_asset_index": None,
-            "first_frame_asset_id": None,
-
-            "last_frame_node_id": None,
-            "last_frame_asset_index": None,
-            "last_frame_asset_id": None,
-
-            # Reference images vere.
             "reference_assets": reference_assets,
             "reference_asset_ids": reference_asset_ids,
 

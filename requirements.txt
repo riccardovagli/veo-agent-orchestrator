@@ -4,3 +4,4 @@ google-cloud-firestore
 mcp[cli]
 httpx
 mcp
+mcp>=1.28,<2

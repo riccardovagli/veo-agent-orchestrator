@@ -2629,6 +2629,195 @@ async def start_omni_video_generation_from_frames(
             ensure_ascii=False,
         )
 
+@mcp.tool()
+async def start_omni_video_generation_from_previous_scene(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    previous_scene_node_id: str,
+    instruction: str,
+    scene_order: int,
+    aspect_ratio: str = "16:9",
+    resolution: str = "1080p",
+    duration: int = 8,
+    variant: str | None = None,
+) -> str:
+    """
+    Start a new OMNI video generation using the final frame
+    of a previous scene as the first frame of the new scene.
+
+    This is a new image-to-video generation, not a native
+    OMNI video extension.
+
+    The backend handles:
+    - resolving the completed video of the previous scene;
+    - extracting its final frame;
+    - using that frame as the first frame;
+    - starting the OMNI generation.
+
+    Returns immediately with a PROCESSING job.
+    """
+
+    try:
+        error = validate_graph_request(
+            project_id,
+            user_id,
+            project_context_token,
+        )
+
+        if error:
+            return json.dumps(
+                {
+                    "error": error,
+                },
+                ensure_ascii=False,
+            )
+
+        if not scene_node_id:
+            return json.dumps(
+                {
+                    "error": "scene_node_id is required",
+                },
+                ensure_ascii=False,
+            )
+
+        if not previous_scene_node_id:
+            return json.dumps(
+                {
+                    "error": "previous_scene_node_id is required",
+                },
+                ensure_ascii=False,
+            )
+
+        if not instruction or not instruction.strip():
+            return json.dumps(
+                {
+                    "error": "instruction is required",
+                },
+                ensure_ascii=False,
+            )
+
+        if aspect_ratio not in ["16:9", "9:16"]:
+            return json.dumps(
+                {
+                    "error": "aspect_ratio must be 16:9 or 9:16",
+                },
+                ensure_ascii=False,
+            )
+
+        if resolution not in [
+            "360p",
+            "720p",
+            "1080p",
+            "4k",
+        ]:
+            return json.dumps(
+                {
+                    "error": (
+                        "resolution must be one of: "
+                        "360p, 720p, 1080p, 4k"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        if duration < 3 or duration > 10:
+            return json.dumps(
+                {
+                    "error": (
+                        "duration must be between "
+                        "3 and 10 seconds"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        db = get_db()
+
+        graph_snapshot = (
+            db.collection("agent_orchestration_state")
+            .document(project_id)
+            .get()
+        )
+
+        if not graph_snapshot.exists:
+            return json.dumps(
+                {
+                    "error": f"Project graph not found: {project_id}",
+                },
+                ensure_ascii=False,
+            )
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {}) or {}
+
+        if scene_node_id not in graph_nodes:
+            return json.dumps(
+                {
+                    "error": (
+                        "Target scene node not found: "
+                        f"{scene_node_id}"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        if previous_scene_node_id not in graph_nodes:
+            return json.dumps(
+                {
+                    "error": (
+                        "Previous scene node not found: "
+                        f"{previous_scene_node_id}"
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        backend_result = call_backend_agent_endpoint(
+            "/agent/create-omni-video-from-previous-scene",
+            {
+                "project_id": project_id,
+                "prompt": instruction.strip(),
+                "previous_scene_node_id":
+                    previous_scene_node_id,
+                "aspect_ratio": aspect_ratio,
+                "resolution": resolution,
+                "duration": duration,
+                "scene_order": scene_order,
+                "source": "agent",
+                "node_id": scene_node_id,
+                "variant": variant,
+            },
+        )
+
+        return json.dumps(
+            {
+                "action": "omni_video_started",
+                "generation_type":
+                    "continuous_image_to_video",
+                "scene_node_id": scene_node_id,
+                "scene_order": scene_order,
+                "previous_scene_node_id":
+                    previous_scene_node_id,
+                "job_id": backend_result.get("jobId"),
+                "node_id": backend_result.get("nodeId"),
+                "status": backend_result.get(
+                    "status",
+                    "PROCESSING",
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        return json.dumps(
+            {
+                "error": str(e),
+            },
+            ensure_ascii=False,
+        )
+
 
 @mcp.tool()
 async def start_omni_video_extension(

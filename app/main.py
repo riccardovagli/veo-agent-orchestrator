@@ -1131,7 +1131,7 @@ async def prepare_visual_asset_composition(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def prepare_scene_video_generation(
     project_id: str,
     user_id: str,
@@ -1285,7 +1285,7 @@ async def prepare_scene_video_generation(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@mcp.tool()
+#@mcp.tool()
 async def prepare_scene_video_generation_from_references(
     project_id: str,
     user_id: str,
@@ -2326,7 +2326,7 @@ async def start_omni_video_generation_from_references(
         return json.dumps({
             "error": str(e)
         }, ensure_ascii=False)
-        
+
 
 
 @mcp.tool()

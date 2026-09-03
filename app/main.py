@@ -2629,6 +2629,347 @@ async def start_omni_video_generation_from_frames(
             ensure_ascii=False,
         )
 
+
+@mcp.tool()
+async def start_omni_video_generation_from_frames_and_references(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+
+    first_frame_node_id: str,
+    first_frame_asset_index: int,
+
+    last_frame_node_id: str,
+    last_frame_asset_index: int,
+
+    reference_node_ids: list[str],
+    reference_asset_indexes: list[int],
+
+    instruction: str,
+    scene_order: int,
+
+    aspect_ratio: str = "16:9",
+    resolution: str = "1080p",
+    duration: int = 8,
+    variant: str | None = None,
+) -> str:
+    """
+    Start an OMNI video generation using:
+    - a first frame;
+    - a last frame;
+    - one or more reference images.
+
+    The first frame and last frame are mandatory.
+    Reference images are resolved from graph node ids and asset indexes.
+    """
+
+    try:
+        error = validate_graph_request(
+            project_id,
+            user_id,
+            project_context_token,
+        )
+
+        if error:
+            return json.dumps(
+                {"error": error},
+                ensure_ascii=False,
+            )
+
+        clean_instruction = instruction.strip()
+
+        if not clean_instruction:
+            return json.dumps(
+                {
+                    "error": "instruction is required"
+                },
+                ensure_ascii=False,
+            )
+
+        if aspect_ratio not in ["16:9", "9:16"]:
+            return json.dumps(
+                {
+                    "error":
+                        "aspect_ratio must be 16:9 or 9:16"
+                },
+                ensure_ascii=False,
+            )
+
+        if resolution not in [
+            "360p",
+            "720p",
+            "1080p",
+            "4k",
+        ]:
+            return json.dumps(
+                {
+                    "error":
+                        "resolution must be one of: "
+                        "360p, 720p, 1080p, 4k"
+                },
+                ensure_ascii=False,
+            )
+
+        if duration < 3 or duration > 10:
+            return json.dumps(
+                {
+                    "error":
+                        "duration must be between 3 and 10 seconds"
+                },
+                ensure_ascii=False,
+            )
+
+        if not reference_node_ids or not reference_asset_indexes:
+            return json.dumps(
+                {
+                    "error":
+                        "reference_node_ids and "
+                        "reference_asset_indexes are required"
+                },
+                ensure_ascii=False,
+            )
+
+        if len(reference_node_ids) != len(
+            reference_asset_indexes
+        ):
+            return json.dumps(
+                {
+                    "error":
+                        "reference_node_ids and "
+                        "reference_asset_indexes must have the same length"
+                },
+                ensure_ascii=False,
+            )
+
+        if len(reference_node_ids) > 10:
+            return json.dumps(
+                {
+                    "error":
+                        "OMNI supports a maximum of 10 reference images"
+                },
+                ensure_ascii=False,
+            )
+
+        db = get_db()
+
+        graph_ref = (
+            db.collection("agent_orchestration_state")
+            .document(project_id)
+        )
+
+        graph_snapshot = graph_ref.get()
+
+        if not graph_snapshot.exists:
+            return json.dumps(
+                {
+                    "error":
+                        f"Project graph not found: {project_id}"
+                },
+                ensure_ascii=False,
+            )
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {}) or {}
+
+        scene_node = graph_nodes.get(scene_node_id)
+
+        if not scene_node:
+            return json.dumps(
+                {
+                    "error":
+                        f"Scene node not found: {scene_node_id}"
+                },
+                ensure_ascii=False,
+            )
+
+        def resolve_asset_id(
+            node_id: str,
+            asset_index: int,
+            label: str,
+        ) -> str:
+            node = graph_nodes.get(node_id)
+
+            if not node:
+                raise ValueError(
+                    f"{label} node not found: {node_id}"
+                )
+
+            generated_assets = (
+                node.get("generated_assets", []) or []
+            )
+
+            selected_asset = None
+
+            for asset in generated_assets:
+                if int(
+                    asset.get("asset_index", -1)
+                ) == int(asset_index):
+                    selected_asset = asset
+                    break
+
+            if not selected_asset:
+                raise ValueError(
+                    f"{label} asset index {asset_index} "
+                    f"not found for node {node_id}"
+                )
+
+            asset_id = selected_asset.get("asset_id")
+
+            if not asset_id:
+                raise ValueError(
+                    f"{label} asset index {asset_index} "
+                    f"for node {node_id} has no asset_id"
+                )
+
+            return asset_id
+
+        try:
+            first_frame_asset_id = resolve_asset_id(
+                first_frame_node_id,
+                first_frame_asset_index,
+                "First frame",
+            )
+
+            last_frame_asset_id = resolve_asset_id(
+                last_frame_node_id,
+                last_frame_asset_index,
+                "Last frame",
+            )
+
+        except ValueError as e:
+            return json.dumps(
+                {
+                    "error": str(e)
+                },
+                ensure_ascii=False,
+            )
+
+        asset_ids = []
+        resolved_references = []
+        seen_asset_ids = set()
+
+        for reference_node_id, reference_asset_index in zip(
+            reference_node_ids,
+            reference_asset_indexes,
+        ):
+            try:
+                asset_id = resolve_asset_id(
+                    reference_node_id,
+                    reference_asset_index,
+                    "Reference",
+                )
+
+            except ValueError as e:
+                return json.dumps(
+                    {
+                        "error": str(e)
+                    },
+                    ensure_ascii=False,
+                )
+
+            if asset_id in seen_asset_ids:
+                return json.dumps(
+                    {
+                        "error":
+                            f"Duplicate reference asset: {asset_id}"
+                    },
+                    ensure_ascii=False,
+                )
+
+            seen_asset_ids.add(asset_id)
+            asset_ids.append(asset_id)
+
+            resolved_references.append(
+                {
+                    "node_id": reference_node_id,
+                    "asset_index": reference_asset_index,
+                    "asset_id": asset_id,
+                }
+            )
+
+        payload = {
+            "project_id": project_id,
+            "prompt": clean_instruction,
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+            "duration": duration,
+            "scene_order": scene_order,
+            "node_id": scene_node_id,
+            "source": "agent",
+            "variant": variant,
+            "first_frame_asset_id": first_frame_asset_id,
+            "last_frame_asset_id": last_frame_asset_id,
+            "asset_ids": asset_ids,
+        }
+
+        backend_result = call_backend_agent_endpoint(
+            "/agent/create-omni-video-from-frames-and-references",
+            payload,
+        )
+
+        job_id = backend_result.get("jobId")
+        node_id = backend_result.get("nodeId")
+        status = backend_result.get("status")
+
+        if not job_id:
+            return json.dumps(
+                {
+                    "error":
+                        "Backend response does not contain jobId",
+                    "backend_response":
+                        backend_result,
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "action": "omni_video_started",
+                "generation_type":
+                    "frames_and_references_to_video",
+                "scene_node_id": scene_node_id,
+                "scene_order": scene_order,
+
+                "first_frame_node_id":
+                    first_frame_node_id,
+                "first_frame_asset_index":
+                    first_frame_asset_index,
+                "first_frame_asset_id":
+                    first_frame_asset_id,
+
+                "last_frame_node_id":
+                    last_frame_node_id,
+                "last_frame_asset_index":
+                    last_frame_asset_index,
+                "last_frame_asset_id":
+                    last_frame_asset_id,
+
+                "references": resolved_references,
+
+                "job_id": job_id,
+                "node_id": node_id,
+                "status":
+                    status or "PROCESSING",
+            },
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        print(
+            "MCP START OMNI VIDEO "
+            "FROM FRAMES AND REFERENCES ERROR:",
+            str(e),
+        )
+
+        return json.dumps(
+            {
+                "error": str(e)
+            },
+            ensure_ascii=False,
+        )
+
+
 @mcp.tool()
 async def start_omni_video_generation_from_previous_scene(
     project_id: str,

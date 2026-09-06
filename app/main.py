@@ -3370,7 +3370,356 @@ async def start_omni_video_extension(
 
 
 
+@mcp.tool()
+async def start_omni_video_edit(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    source_job_id: str,
+    instruction: str,
+    scene_order: int,
+    resolution: str = "1080p",
+    variant: str | None = None,
+) -> str:
+    """
+    Edit an existing OMNI video using a textual instruction.
 
+    Use this tool when the user wants to modify an existing video
+    without using additional reference images.
+
+    source_job_id identifies the existing video to edit.
+    """
+
+    try:
+        error = validate_graph_request(
+            project_id,
+            user_id,
+            project_context_token,
+        )
+
+        if error:
+            return json.dumps(
+                {"error": error},
+                ensure_ascii=False,
+            )
+
+        if not source_job_id:
+            return json.dumps(
+                {"error": "source_job_id is required"},
+                ensure_ascii=False,
+            )
+
+        clean_instruction = instruction.strip()
+
+        if not clean_instruction:
+            return json.dumps(
+                {"error": "instruction is required"},
+                ensure_ascii=False,
+            )
+
+        if resolution not in [
+            "360p",
+            "720p",
+            "1080p",
+            "4k",
+        ]:
+            return json.dumps(
+                {
+                    "error":
+                        "resolution must be one of: "
+                        "360p, 720p, 1080p, 4k"
+                },
+                ensure_ascii=False,
+            )
+
+        payload = {
+            "source_job_id": source_job_id,
+            "project_id": project_id,
+            "prompt": clean_instruction,
+            "scene_order": scene_order,
+            "source": "agent",
+            "node_id": scene_node_id,
+            "variant": variant,
+            "resolution": resolution,
+        }
+
+        backend_result = call_backend_agent_endpoint(
+            "/agent/edit-omni-video",
+            payload,
+        )
+
+        job_id = backend_result.get("jobId")
+        node_id = backend_result.get("nodeId")
+        status = backend_result.get("status")
+
+        if not job_id:
+            return json.dumps(
+                {
+                    "error":
+                        "Backend response does not contain jobId",
+                    "backend_response": backend_result,
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "action": "omni_video_started",
+                "generation_type": "edit",
+                "scene_node_id": scene_node_id,
+                "scene_order": scene_order,
+                "source_job_id": source_job_id,
+                "job_id": job_id,
+                "node_id": node_id,
+                "status": status or "PROCESSING",
+            },
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        print(
+            "MCP START OMNI VIDEO EDIT ERROR:",
+            str(e),
+        )
+
+        return json.dumps(
+            {"error": str(e)},
+            ensure_ascii=False,
+        )
+
+
+
+@mcp.tool()
+async def start_omni_video_edit_with_references(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    scene_node_id: str,
+    source_job_id: str,
+    instruction: str,
+    scene_order: int,
+    reference_node_ids: list[str],
+    reference_asset_indexes: list[int],
+    resolution: str = "1080p",
+    variant: str | None = None,
+) -> str:
+    """
+    Edit an existing OMNI video using a textual instruction
+    and one or more existing image references.
+
+    Use this tool for replacements or insertions where the
+    appearance of the new object, character, environment or
+    other element must come from reference images.
+    """
+
+    try:
+        error = validate_graph_request(
+            project_id,
+            user_id,
+            project_context_token,
+        )
+
+        if error:
+            return json.dumps(
+                {"error": error},
+                ensure_ascii=False,
+            )
+
+        if not source_job_id:
+            return json.dumps(
+                {"error": "source_job_id is required"},
+                ensure_ascii=False,
+            )
+
+        clean_instruction = instruction.strip()
+
+        if not clean_instruction:
+            return json.dumps(
+                {"error": "instruction is required"},
+                ensure_ascii=False,
+            )
+
+        if resolution not in [
+            "360p",
+            "720p",
+            "1080p",
+            "4k",
+        ]:
+            return json.dumps(
+                {
+                    "error":
+                        "resolution must be one of: "
+                        "360p, 720p, 1080p, 4k"
+                },
+                ensure_ascii=False,
+            )
+
+        if not reference_node_ids or not reference_asset_indexes:
+            return json.dumps(
+                {
+                    "error":
+                        "reference_node_ids and "
+                        "reference_asset_indexes are required"
+                },
+                ensure_ascii=False,
+            )
+
+        if len(reference_node_ids) != len(reference_asset_indexes):
+            return json.dumps(
+                {
+                    "error":
+                        "reference_node_ids and "
+                        "reference_asset_indexes must have the same length"
+                },
+                ensure_ascii=False,
+            )
+
+        if len(reference_node_ids) > 10:
+            return json.dumps(
+                {
+                    "error":
+                        "A maximum of 10 reference images is supported"
+                },
+                ensure_ascii=False,
+            )
+
+        db = get_db()
+
+        graph_snapshot = (
+            db.collection("agent_orchestration_state")
+            .document(project_id)
+            .get()
+        )
+
+        if not graph_snapshot.exists:
+            return json.dumps(
+                {
+                    "error":
+                        f"Project graph not found: {project_id}"
+                },
+                ensure_ascii=False,
+            )
+
+        graph_data = graph_snapshot.to_dict() or {}
+        graph_nodes = graph_data.get("graph_nodes", {}) or {}
+
+        asset_ids = []
+        resolved_references = []
+
+        for reference_node_id, asset_index in zip(
+            reference_node_ids,
+            reference_asset_indexes,
+        ):
+            node = graph_nodes.get(reference_node_id)
+
+            if not node:
+                return json.dumps(
+                    {
+                        "error":
+                            f"Reference node not found: "
+                            f"{reference_node_id}"
+                    },
+                    ensure_ascii=False,
+                )
+
+            generated_assets = (
+                node.get("generated_assets", []) or []
+            )
+
+            selected_asset = None
+
+            for asset in generated_assets:
+                if int(asset.get("asset_index", -1)) == int(asset_index):
+                    selected_asset = asset
+                    break
+
+            if not selected_asset:
+                return json.dumps(
+                    {
+                        "error":
+                            f"Asset index {asset_index} not found "
+                            f"for node {reference_node_id}"
+                    },
+                    ensure_ascii=False,
+                )
+
+            asset_id = selected_asset.get("asset_id")
+
+            if not asset_id:
+                return json.dumps(
+                    {
+                        "error":
+                            f"Reference asset has no asset_id: "
+                            f"{reference_node_id}/{asset_index}"
+                    },
+                    ensure_ascii=False,
+                )
+
+            asset_ids.append(asset_id)
+
+            resolved_references.append({
+                "node_id": reference_node_id,
+                "asset_index": asset_index,
+                "asset_id": asset_id,
+            })
+
+        payload = {
+            "source_job_id": source_job_id,
+            "project_id": project_id,
+            "prompt": clean_instruction,
+            "asset_ids": asset_ids,
+            "scene_order": scene_order,
+            "source": "agent",
+            "node_id": scene_node_id,
+            "variant": variant,
+            "resolution": resolution,
+        }
+
+        backend_result = call_backend_agent_endpoint(
+            "/agent/edit-omni-video-with-references",
+            payload,
+        )
+
+        job_id = backend_result.get("jobId")
+        node_id = backend_result.get("nodeId")
+        status = backend_result.get("status")
+
+        if not job_id:
+            return json.dumps(
+                {
+                    "error":
+                        "Backend response does not contain jobId",
+                    "backend_response": backend_result,
+                },
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "action": "omni_video_started",
+                "generation_type": "edit_with_references",
+                "scene_node_id": scene_node_id,
+                "scene_order": scene_order,
+                "source_job_id": source_job_id,
+                "job_id": job_id,
+                "node_id": node_id,
+                "status": status or "PROCESSING",
+                "references": resolved_references,
+            },
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        print(
+            "MCP START OMNI VIDEO EDIT WITH REFERENCES ERROR:",
+            str(e),
+        )
+
+        return json.dumps(
+            {"error": str(e)},
+            ensure_ascii=False,
+        )
 
 
 

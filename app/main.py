@@ -938,6 +938,7 @@ async def prepare_visual_asset_edit(
     node_id: str,
     asset_index: int,
     instruction: str,
+    aspect_ratio: str = "16:9",
     variant: str | None = None,
 ) -> str:
     try:
@@ -956,6 +957,15 @@ async def prepare_visual_asset_edit(
             result = {"error": error}
             print("prepare_visual_asset_edit RESULT:", result)
             return json.dumps(result, ensure_ascii=False)
+
+        if aspect_ratio not in ["16:9", "9:16", "1:1"]:
+            result = {
+                "error": "aspect_ratio must be one of: 16:9, 9:16, 1:1"
+            }
+            print("prepare_visual_asset_edit RESULT:", result)
+            return json.dumps(result, ensure_ascii=False)
+
+        print("aspect_ratio:", aspect_ratio)
 
         db = get_db()
 
@@ -1024,6 +1034,7 @@ async def prepare_visual_asset_edit(
             "asset_id": asset_id,
             "asset_type": selected_asset.get("asset_type") or node.get("prepared_asset_type"),
             "instruction": instruction,
+            "aspect_ratio": aspect_ratio,
             "variant": variant,
         }
 
@@ -1046,6 +1057,7 @@ async def prepare_visual_asset_composition(
     asset_node_ids: list[str],
     asset_indexes: list[int],
     instruction: str,
+    aspect_ratio: str = "1:1",
     node_id: str | None = None,
     variant: str | None = None,
 ) -> str:
@@ -1053,6 +1065,11 @@ async def prepare_visual_asset_composition(
         error = validate_graph_request(project_id, user_id, project_context_token)
         if error:
             return json.dumps({"error": error}, ensure_ascii=False)
+
+        if aspect_ratio not in ["16:9", "9:16", "1:1"]:
+            return json.dumps({
+                "error": "aspect_ratio must be one of: 16:9, 9:16, 1:1"
+            }, ensure_ascii=False)
 
         if not asset_node_ids or not asset_indexes:
             return json.dumps({
@@ -1124,6 +1141,7 @@ async def prepare_visual_asset_composition(
             "asset_ids": [a["asset_id"] for a in resolved_assets],
             "assets": resolved_assets,
             "instruction": instruction,
+            "aspect_ratio": aspect_ratio,
             "variant": variant,
         }, ensure_ascii=False)
 

@@ -1,3 +1,4 @@
+from app.image_composition_tool import start_image_composition
 from app.image_edit_tool import start_image_edit
 from app.image_generation_tool import start_image_generation
 from fastapi import FastAPI
@@ -861,102 +862,25 @@ async def prepare_visual_asset_edit(
 
 @mcp.tool()
 async def prepare_visual_asset_composition(
-    project_id: str,
-    user_id: str,
-    project_context_token: str,
-    asset_node_ids: list[str],
-    asset_indexes: list[int],
-    instruction: str,
-    aspect_ratio: str = "1:1",
-    node_id: str | None = None,
-    variant: str | None = None,
-) -> str:
-    try:
-        error = validate_graph_request(project_id, user_id, project_context_token)
-        if error:
-            return json.dumps({"error": error}, ensure_ascii=False)
+    project_id: str, user_id: str, project_context_token: str,
+    asset_node_ids: list[str] | None = None, asset_indexes: list[int] | None = None,
+    instruction: str = "", aspect_ratio: str = "1:1",
+    node_id: str | None = None, variant: str | None = None,
+    asset_ids: list[str] | None = None, request_id: str | None = None,
+) -> dict:
+    """Compose 2 to 14 distinct project images with Nano Banana 2.1.
 
-        if aspect_ratio not in ["16:9", "9:16", "1:1"]:
-            return json.dumps({
-                "error": "aspect_ratio must be one of: 16:9, 9:16, 1:1"
-            }, ensure_ascii=False)
-
-        if not asset_node_ids or not asset_indexes:
-            return json.dumps({
-                "error": "asset_node_ids and asset_indexes are required"
-            }, ensure_ascii=False)
-
-        if len(asset_node_ids) != len(asset_indexes):
-            return json.dumps({
-                "error": "asset_node_ids and asset_indexes must have the same length"
-            }, ensure_ascii=False)
-
-        if len(asset_node_ids) < 2:
-            return json.dumps({
-                "error": "At least 2 assets are required for composition"
-            }, ensure_ascii=False)
-
-        db = get_db()
-        graph_ref = db.collection("agent_orchestration_state").document(project_id)
-        graph_snapshot = graph_ref.get()
-
-        if not graph_snapshot.exists:
-            return json.dumps({
-                "error": f"Project graph not found: {project_id}"
-            }, ensure_ascii=False)
-
-        graph_data = graph_snapshot.to_dict() or {}
-        graph_nodes = graph_data.get("graph_nodes", {})
-
-        def resolve_asset(node, asset_index):
-            generated_assets = node.get("generated_assets", []) or []
-            for asset in generated_assets:
-                if int(asset.get("asset_index", -1)) == int(asset_index):
-                    return asset
-            return None
-
-        resolved_assets = []
-
-        for asset_node_id, asset_index in zip(asset_node_ids, asset_indexes):
-            node = graph_nodes.get(asset_node_id)
-
-            if not node:
-                return json.dumps({
-                    "error": f"Node not found: {asset_node_id}"
-                }, ensure_ascii=False)
-
-            asset = resolve_asset(node, asset_index)
-
-            if not asset:
-                return json.dumps({
-                    "error": f"Asset index {asset_index} not found for node {asset_node_id}"
-                }, ensure_ascii=False)
-
-            asset_id = asset.get("asset_id")
-            if not asset_id:
-                return json.dumps({
-                    "error": f"Asset index {asset_index} for node {asset_node_id} has no asset_id"
-                }, ensure_ascii=False)
-
-            resolved_assets.append({
-                "node_id": asset_node_id,
-                "asset_index": asset_index,
-                "asset_id": asset_id,
-                "asset_type": asset.get("asset_type") or node.get("prepared_asset_type"),
-            })
-
-        return json.dumps({
-            "action": "compose_assets",
-            "node_id": node_id,
-            "asset_ids": [a["asset_id"] for a in resolved_assets],
-            "assets": resolved_assets,
-            "instruction": instruction,
-            "aspect_ratio": aspect_ratio,
-            "variant": variant,
-        }, ensure_ascii=False)
-
-    except Exception as e:
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    Select ordered asset_ids from chat attachments, or matching ordered lists
+    asset_node_ids and asset_indexes. Reference image numbers in instruction
+    follow that order. Preserve originals; the result is a new asset/version.
+    The backend starts a real asynchronous job. Respond now; do not wait, poll,
+    or emit frontend generation actions. Results arrive through SSE.
+    Preserve request_id on retry when available; never rerun uncertain work automatically.
+    """
+    return await start_image_composition(
+        project_id, user_id, project_context_token, asset_node_ids, asset_indexes,
+        instruction, aspect_ratio, node_id, variant, asset_ids, request_id,
+    )
 
 
 #@mcp.tool()

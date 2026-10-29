@@ -1,3 +1,4 @@
+from app.image_zoom_tool import start_image_zoom_out
 from app.image_composition_tool import start_image_composition
 from app.image_edit_tool import start_image_edit
 from app.image_generation_tool import start_image_generation
@@ -158,133 +159,24 @@ def call_backend_agent_endpoint(
 
 @mcp.tool()
 async def prepare_visual_asset_zoom_out(
-    project_id: str,
-    user_id: str,
-    project_context_token: str,
-    node_id: str,
-    asset_index: int,
-    scale_factor: float,
-    instruction: str | None = None,
-    variant: str | None = None,
-    mode: str = "auto",
-) -> str:
-    try:
-        print("========== MCP prepare_visual_asset_zoom_out START ==========")
-        print("project_id:", project_id)
-        print("user_id:", user_id)
-        print("node_id:", node_id)
-        print("asset_index:", asset_index)
-        print("scale_factor:", scale_factor)
-        print("instruction:", instruction)
-        print("variant:", variant)
-        print("mode:", mode)
+    project_id: str, user_id: str, project_context_token: str,
+    node_id: str | None = None, asset_index: int | None = None,
+    scale_factor: float = 0.7, instruction: str | None = None,
+    variant: str | None = None, mode: str = "generative",
+    asset_id: str | None = None, request_id: str | None = None,
+) -> dict:
+    """Generate a wider framing in 4K with Nano Banana 2.1 from one original image.
 
-        error = validate_graph_request(project_id, user_id, project_context_token)
-        print("validate_graph_request error:", error)
-
-        if error:
-            result = {"error": error}
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        if scale_factor <= 0 or scale_factor >= 1:
-            result = {
-                "error": (
-                    "scale_factor must be greater than 0 and less than 1. "
-                    "Example: 0.65 means the original image will be reduced to 65%."
-                )
-            }
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        if mode not in ["auto", "plain_background", "scene_outpaint"]:
-            result = {
-                "error": "mode must be one of: auto, plain_background, scene_outpaint"
-            }
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        db = get_db()
-
-        graph_ref = db.collection("agent_orchestration_state").document(project_id)
-        graph_snapshot = graph_ref.get()
-
-        print("graph exists:", graph_snapshot.exists)
-
-        if not graph_snapshot.exists:
-            result = {"error": f"Project graph not found: {project_id}"}
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        graph_data = graph_snapshot.to_dict() or {}
-        graph_nodes = graph_data.get("graph_nodes", {}) or {}
-
-        print("graph_nodes keys:", list(graph_nodes.keys()))
-
-        node = graph_nodes.get(node_id)
-        print("node found:", bool(node))
-
-        if not node:
-            result = {"error": f"Node not found: {node_id}"}
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        generated_assets = node.get("generated_assets", []) or []
-        print("generated_assets count:", len(generated_assets))
-
-        for a in generated_assets:
-            print("asset candidate:", {
-                "asset_index": a.get("asset_index"),
-                "asset_id": a.get("asset_id"),
-                "asset_type": a.get("asset_type"),
-            })
-
-        selected_asset = None
-        for asset in generated_assets:
-            if int(asset.get("asset_index", -1)) == int(asset_index):
-                selected_asset = asset
-                break
-
-        print("selected_asset:", selected_asset)
-
-        if not selected_asset:
-            result = {
-                "error": f"Asset index {asset_index} not found for node {node_id}"
-            }
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        asset_id = selected_asset.get("asset_id")
-        print("selected asset_id:", asset_id)
-
-        if not asset_id:
-            result = {
-                "error": f"Asset index {asset_index} for node {node_id} has no asset_id"
-            }
-            print("prepare_visual_asset_zoom_out RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        result = {
-            "action": "zoom_out_image_asset",
-            "node_id": node_id,
-            "asset_index": asset_index,
-            "asset_id": asset_id,
-            "asset_type": selected_asset.get("asset_type") or node.get("prepared_asset_type"),
-            "scale_factor": scale_factor,
-            "instruction": instruction,
-            "variant": variant,
-            "mode": mode,
-        }
-
-        print("prepare_visual_asset_zoom_out RESULT:", result)
-        print("========== MCP prepare_visual_asset_zoom_out END ==========")
-
-        return json.dumps(result, ensure_ascii=False)
-
-    except Exception as e:
-        print("========== MCP prepare_visual_asset_zoom_out ERROR ==========")
-        print("ERROR:", str(e))
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    Select asset_id from a chat attachment or node_id and asset_index.
+    scale_factor is artistic guidance (0 < factor < 1), never exact geometry.
+    Every mode is now generative, including legacy auto/plain_background values.
+    Preserve the original asset. Respond immediately after job acceptance;
+    the result arrives through SSE. Do not poll or repeat uncertain requests.
+    """
+    return await start_image_zoom_out(
+        project_id, user_id, project_context_token, node_id, asset_index,
+        scale_factor, instruction, variant, mode, asset_id, request_id,
+    )
         
 
 

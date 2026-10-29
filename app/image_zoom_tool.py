@@ -5,13 +5,13 @@ import httpx
 
 async def start_image_zoom_out(project_id, user_id, project_context_token,
                                node_id=None, asset_index=None, scale_factor=0.7,
-                               instruction=None, variant=None, mode='generative',
-                               asset_id=None, request_id=None):
+                               instruction=None, variant=None, mode='hybrid',
+                               asset_id=None, request_id=None, aspect_ratio=None):
     payload = {
         'project_id':project_id, 'user_id':user_id, 'project_context_token':project_context_token,
         'node_id':node_id, 'asset_index':asset_index, 'asset_id':asset_id,
         'scale_factor':scale_factor, 'instruction':instruction, 'variant':variant,
-        'source':'agent', 'request_id':request_id, 'mode':mode,
+        'source':'agent', 'request_id':request_id, 'mode':mode, 'aspect_ratio':aspect_ratio,
     }
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(25,connect=10)) as client:

@@ -162,20 +162,25 @@ async def prepare_visual_asset_zoom_out(
     project_id: str, user_id: str, project_context_token: str,
     node_id: str | None = None, asset_index: int | None = None,
     scale_factor: float = 0.7, instruction: str | None = None,
-    variant: str | None = None, mode: str = "generative",
+    variant: str | None = None, mode: str = "hybrid",
     asset_id: str | None = None, request_id: str | None = None,
+    aspect_ratio: str | None = None,
 ) -> dict:
     """Generate a wider framing in 4K with Nano Banana 2.1 from one original image.
 
     Select asset_id from a chat attachment or node_id and asset_index.
-    scale_factor is artistic guidance (0 < factor < 1), never exact geometry.
-    Every mode is now generative, including legacy auto/plain_background values.
+    scale_factor controls the size of the whole original image fitted inside
+    the output canvas (0 < factor < 1). The backend prepares a reduced central
+    image, outpaints the surrounding area and restores the source in the centre.
+    Pass aspect_ratio (16:9, 9:16, 1:1) when the user specifies it; otherwise
+    the worker chooses the nearest supported ratio from the source dimensions.
+    All legacy modes now use hybrid geometry plus generative outpainting.
     Preserve the original asset. Respond immediately after job acceptance;
     the result arrives through SSE. Do not poll or repeat uncertain requests.
     """
     return await start_image_zoom_out(
         project_id, user_id, project_context_token, node_id, asset_index,
-        scale_factor, instruction, variant, mode, asset_id, request_id,
+        scale_factor, instruction, variant, mode, asset_id, request_id, aspect_ratio,
     )
         
 

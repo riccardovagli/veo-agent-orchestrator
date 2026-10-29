@@ -1,3 +1,4 @@
+from app.image_edit_tool import start_image_edit
 from app.image_generation_tool import start_image_generation
 from fastapi import FastAPI
 from google.cloud import firestore
@@ -838,121 +839,24 @@ async def prepare_visual_asset_generation(
 
 @mcp.tool()
 async def prepare_visual_asset_edit(
-    project_id: str,
-    user_id: str,
-    project_context_token: str,
-    node_id: str,
-    asset_index: int,
-    instruction: str,
-    aspect_ratio: str = "16:9",
-    variant: str | None = None,
-) -> str:
-    try:
-        print("========== MCP prepare_visual_asset_edit START ==========")
-        print("project_id:", project_id)
-        print("user_id:", user_id)
-        print("node_id:", node_id)
-        print("asset_index:", asset_index)
-        print("instruction:", instruction)
-        print("variant:", variant)
+    project_id: str, user_id: str, project_context_token: str,
+    node_id: str | None = None, asset_index: int | None = None,
+    instruction: str = "", aspect_ratio: str | None = None,
+    variant: str | None = None, asset_id: str | None = None,
+    request_id: str | None = None,
+) -> dict:
+    """Start editing exactly one existing project image, then respond immediately.
 
-        error = validate_graph_request(project_id, user_id, project_context_token)
-        print("validate_graph_request error:", error)
-
-        if error:
-            result = {"error": error}
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        if aspect_ratio not in ["16:9", "9:16", "1:1"]:
-            result = {
-                "error": "aspect_ratio must be one of: 16:9, 9:16, 1:1"
-            }
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        print("aspect_ratio:", aspect_ratio)
-
-        db = get_db()
-
-        graph_ref = db.collection("agent_orchestration_state").document(project_id)
-        graph_snapshot = graph_ref.get()
-
-        print("graph exists:", graph_snapshot.exists)
-
-        if not graph_snapshot.exists:
-            result = {"error": f"Project graph not found: {project_id}"}
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        graph_data = graph_snapshot.to_dict() or {}
-        graph_nodes = graph_data.get("graph_nodes", {})
-
-        print("graph_nodes keys:", list(graph_nodes.keys()))
-
-        node = graph_nodes.get(node_id)
-        print("node found:", bool(node))
-
-        if not node:
-            result = {"error": f"Node not found: {node_id}"}
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        generated_assets = node.get("generated_assets", []) or []
-        print("generated_assets count:", len(generated_assets))
-
-        for a in generated_assets:
-            print("asset candidate:", {
-                "asset_index": a.get("asset_index"),
-                "asset_id": a.get("asset_id"),
-                "asset_type": a.get("asset_type"),
-            })
-
-        selected_asset = None
-        for asset in generated_assets:
-            if int(asset.get("asset_index", -1)) == int(asset_index):
-                selected_asset = asset
-                break
-
-        print("selected_asset:", selected_asset)
-
-        if not selected_asset:
-            result = {
-                "error": f"Asset index {asset_index} not found for node {node_id}"
-            }
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        asset_id = selected_asset.get("asset_id")
-        print("selected asset_id:", asset_id)
-
-        if not asset_id:
-            result = {
-                "error": f"Asset index {asset_index} for node {node_id} has no asset_id"
-            }
-            print("prepare_visual_asset_edit RESULT:", result)
-            return json.dumps(result, ensure_ascii=False)
-
-        result = {
-            "action": "edit_image_asset",
-            "node_id": node_id,
-            "asset_index": asset_index,
-            "asset_id": asset_id,
-            "asset_type": selected_asset.get("asset_type") or node.get("prepared_asset_type"),
-            "instruction": instruction,
-            "aspect_ratio": aspect_ratio,
-            "variant": variant,
-        }
-
-        print("prepare_visual_asset_edit RESULT:", result)
-        print("========== MCP prepare_visual_asset_edit END ==========")
-
-        return json.dumps(result, ensure_ascii=False)
-
-    except Exception as e:
-        print("========== MCP prepare_visual_asset_edit ERROR ==========")
-        print("ERROR:", str(e))
-        return json.dumps({"error": str(e)}, ensure_ascii=False)
+    Select by asset_id (including chat attachments), or node_id and asset_index.
+    Omit aspect_ratio to preserve the input framing unless a new ratio is requested.
+    The backend stores a new version; it preserves the original. Do not wait,
+    poll, or issue a frontend generation action. Results arrive via SSE.
+    Preserve request_id on retries when available; never retry uncertain work automatically.
+    """
+    return await start_image_edit(
+        project_id, user_id, project_context_token, node_id, asset_index,
+        instruction, aspect_ratio, variant, asset_id, request_id,
+    )
 
 
 @mcp.tool()

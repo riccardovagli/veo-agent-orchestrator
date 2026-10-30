@@ -24,6 +24,8 @@ def require_project(db,project_id,user):
         # Transitional policy only, until existing projects have a stable owner_id.
         allowed=bool(user.get('email') and user.get('email_verified') is True and data.get('owner_email')==user['email'])
     if not allowed:raise HTTPException(403,'Project access denied')
+    if data.get('migration_state') == 'archived':
+        raise HTTPException(410, 'Progetto migrato: ricarica l’elenco dei progetti')
     return data
 
 

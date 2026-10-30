@@ -1,3 +1,5 @@
+from app.project_access import require_signed_project
+from fastapi import HTTPException
 from app.frame_extraction_tool import start_frame_extraction
 from app.image_zoom_tool import start_image_zoom_out
 from app.image_composition_tool import start_image_composition
@@ -72,40 +74,10 @@ def short_hash(value: str | None) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 def validate_graph_request(project_id: str, user_id: str, project_context_token: str) -> str | None:
-    if not project_id:
-        return "❌ Errore: project_id mancante"
-
-    if "/" in project_id:
-        return "❌ Errore: project_id non valido"
-
-    if not user_id:
-        return "❌ Errore: user_id mancante"
-
-    if not project_context_token:
-        return "❌ Errore: project_context_token mancante"
-
-    #if not verify_project_context_token(user_id, project_id, project_context_token):
-    #    return "❌ Errore: token progetto non valido"
-
-    expected = make_project_context_token(user_id, project_id)
-    token_ok = hmac.compare_digest(expected, project_context_token)
-
-    if not token_ok:
-        print("========== MCP PROJECT TOKEN MISMATCH ==========")
-        print("project_id repr:", repr(project_id))
-        print("project_id hash:", short_hash(project_id))
-        print("user_id repr:", repr(user_id))
-        print("user_id hash:", short_hash(user_id))
-        print("secret hash:", short_hash(os.environ.get("PROJECT_CONTEXT_SECRET")))
-        print("received token prefix:", project_context_token[:12])
-        print("received token suffix:", project_context_token[-12:])
-        print("received token len:", len(project_context_token))
-        print("expected token prefix:", expected[:12])
-        print("expected token suffix:", expected[-12:])
-        print("expected token len:", len(expected))
-        print("================================================")
-        return "❌ Errore: token progetto non valido"
-
+    try:
+        require_signed_project(get_db(), project_id, user_id, project_context_token)
+    except HTTPException as error:
+        return str(error.detail)
     return None
 
 
@@ -126,6 +98,7 @@ def replace_dependency(depends_on: list[str], old_node_id: str, new_node_id: str
 def call_backend_agent_endpoint(
     endpoint: str,
     payload: dict,
+    *, user_id: str, project_context_token: str,
 ) -> dict:
     response = requests.post(
         f"{BACKEND_URL}{endpoint}",
@@ -133,6 +106,8 @@ def call_backend_agent_endpoint(
         headers={
             "X-FrameButcher-Internal-Token":
                 BACKEND_INTERNAL_TOKEN,
+            "X-FrameButcher-User-Id": user_id,
+            "X-FrameButcher-Project-Context": project_context_token,
         },
         timeout=20,
     )
@@ -179,6 +154,9 @@ async def prepare_visual_asset_zoom_out(
     Preserve the original asset. Respond immediately after job acceptance;
     the result arrives through SSE. Do not poll or repeat uncertain requests.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     return await start_image_zoom_out(
         project_id, user_id, project_context_token, node_id, asset_index,
         scale_factor, instruction, variant, mode, asset_id, request_id, aspect_ratio,
@@ -213,6 +191,9 @@ async def copy_asset_between_nodes(
     - the source and target node are the same;
     - the target node already references the same asset_id.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -444,6 +425,9 @@ async def upsert_graph_node(
     depends_on: list[str] | None = None,
     status: str = "VALID",
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         print("MCP TOOL CALLED: upsert_graph_node")
         print("PROJECT_ID:", project_id)
@@ -500,6 +484,9 @@ async def get_graph_state(
     user_id: str,
     project_context_token: str,
 ) -> dict:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     if not verify_project_context_token(user_id, project_id, project_context_token):
         return {"error": "Invalid project context token"}
 
@@ -519,6 +506,9 @@ async def delete_graph_node(
     project_context_token: str,
     node_id: str,
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     if not verify_project_context_token(user_id, project_id, project_context_token):
         return "❌ Errore: token progetto non valido"
 
@@ -542,6 +532,9 @@ async def merge_graph_nodes(
     merged_content: str | None = None,
     merged_status: str = "VALID",
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         print("MCP TOOL CALLED: merge_graph_nodes")
         print("PROJECT_ID:", project_id)
@@ -638,6 +631,9 @@ async def rename_graph_node(
     old_node_id: str,
     new_node_id: str,
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         print("MCP TOOL CALLED: rename_graph_node")
         print("PROJECT_ID:", project_id)
@@ -730,6 +726,9 @@ async def prepare_visual_asset_generation(
     frontend. Preserve request_id on retries when it is available. Completion
     is notified through SSE. model_version is retained only for compatibility.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     return await start_image_generation(
         project_id, user_id, project_context_token, node_id, asset_type,
         image_prompt, aspect_ratio, model_version, request_id,
@@ -752,6 +751,9 @@ async def prepare_visual_asset_edit(
     poll, or issue a frontend generation action. Results arrive via SSE.
     Preserve request_id on retries when available; never retry uncertain work automatically.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     return await start_image_edit(
         project_id, user_id, project_context_token, node_id, asset_index,
         instruction, aspect_ratio, variant, asset_id, request_id,
@@ -775,6 +777,9 @@ async def prepare_visual_asset_composition(
     or emit frontend generation actions. Results arrive through SSE.
     Preserve request_id on retry when available; never rerun uncertain work automatically.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     return await start_image_composition(
         project_id, user_id, project_context_token, asset_node_ids, asset_indexes,
         instruction, aspect_ratio, node_id, variant, asset_ids, request_id,
@@ -1197,6 +1202,9 @@ async def prepare_video_frame_extraction(
     Returns acceptance immediately; the saved frame is delivered through SSE.
     Do not wait for the image, call a status tool, or submit extraction again.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     error = validate_graph_request(project_id, user_id, project_context_token)
     if error:
         return json.dumps({"error": error}, ensure_ascii=False)
@@ -1216,6 +1224,9 @@ async def prepare_scene_video_deletion(
     scene_order: int | None = None,
     job_id: str | None = None,
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         error = validate_graph_request(project_id, user_id, project_context_token)
         if error:
@@ -1354,6 +1365,9 @@ async def get_project_chat_context(
     project_context_token: str,
     limit: int = 10,
 ) -> dict:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         print("MCP TOOL CALLED: get_project_chat_context")
         print("PROJECT_ID:", project_id)
@@ -1443,6 +1457,9 @@ async def prepare_visual_asset_deletion(
     node_id: str,
     asset_index: int,
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         error = validate_graph_request(project_id, user_id, project_context_token)
         if error:
@@ -1528,6 +1545,9 @@ async def start_omni_video_generation(
     - first-and-last-frame generation;
     - extending an existing video.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -1632,6 +1652,7 @@ async def start_omni_video_generation(
         backend_result = call_backend_agent_endpoint(
             "/agent/create-omni-video",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -1693,6 +1714,9 @@ async def start_omni_video_generation_from_references(
     duration: int = 8,
     variant: str | None = None,
 ) -> str:
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
     try:
         error = validate_graph_request(
             project_id,
@@ -1870,6 +1894,7 @@ async def start_omni_video_generation_from_references(
                 "variant": variant,
                 "asset_ids": asset_ids,
             },
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         # ---------------------------------------------------------
@@ -1934,6 +1959,9 @@ async def start_omni_video_generation_from_frames(
     The last frame is optional.
     If a last frame is used, both node id and asset index are required.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -2137,6 +2165,7 @@ async def start_omni_video_generation_from_frames(
         backend_result = call_backend_agent_endpoint(
             "/agent/create-omni-video-from-frames",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -2231,6 +2260,9 @@ async def start_omni_video_generation_from_frames_and_references(
     The first frame and last frame are mandatory.
     Reference images are resolved from graph node ids and asset indexes.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -2474,6 +2506,7 @@ async def start_omni_video_generation_from_frames_and_references(
         backend_result = call_backend_agent_endpoint(
             "/agent/create-omni-video-from-frames-and-references",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -2567,6 +2600,9 @@ async def start_omni_video_generation_from_previous_scene(
 
     Returns immediately with a PROCESSING job.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -2698,6 +2734,7 @@ async def start_omni_video_generation_from_previous_scene(
                 "node_id": scene_node_id,
                 "variant": variant,
             },
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         return json.dumps(
@@ -2755,6 +2792,9 @@ async def start_omni_video_extension(
     - first-frame generation;
     - first-and-last-frame generation.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -2891,6 +2931,7 @@ async def start_omni_video_extension(
         backend_result = call_backend_agent_endpoint(
             "/agent/extend-omni-video",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -2958,6 +2999,9 @@ async def start_omni_video_edit(
 
     source_job_id identifies the existing video to edit.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -3015,6 +3059,7 @@ async def start_omni_video_edit(
         backend_result = call_backend_agent_endpoint(
             "/agent/edit-omni-video",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -3080,6 +3125,9 @@ async def start_omni_video_edit_with_references(
     appearance of the new object, character, environment or
     other element must come from reference images.
     """
+    access_error = validate_graph_request(project_id, user_id, project_context_token)
+    if access_error:
+        return {'error': access_error}
 
     try:
         error = validate_graph_request(
@@ -3247,6 +3295,7 @@ async def start_omni_video_edit_with_references(
         backend_result = call_backend_agent_endpoint(
             "/agent/edit-omni-video-with-references",
             payload,
+            user_id=user_id, project_context_token=project_context_token,
         )
 
         job_id = backend_result.get("jobId")
@@ -3324,44 +3373,12 @@ def health():
 
 
 @app.get("/debug-firestore")
-async def debug_firestore(project_id: str = "Catnip"):
-    try:
-        db = get_db()
-
-        doc_ref = db.collection("agent_orchestration_state").document(project_id)
-
-        doc_ref.set(
-            {
-                "status": "test_funzionante",
-                "debug_info": "Test eseguito correttamente",
-                "timestamp": firestore.SERVER_TIMESTAMP,
-            },
-            merge=True,
-        )
-
-        return {
-            "message": f"SCRITTURA RIUSCITA su progetto: {project_id}!",
-            "note": "Controlla ora la collection agent_orchestration_state",
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
+async def debug_firestore(project_id: str = 'Catnip'):
+    raise HTTPException(410, 'Debug endpoint disabled')
 
 @app.post("/process")
 async def handle_agent_process(req: ProcessRequest):
-    try:
-        # Per parlare con l'agente FastMCP e fargli generare una risposta
-        # usiamo il metodo .chat() dell'istanza mcp che hai già creato.
-        # Questo avvierà il ragionamento dell'LLM (Claude/Gemini) configurato.
-        
-        result = await mcp.chat(req.message)
-        
-        # FastMCP restituisce un oggetto, noi prendiamo il testo della risposta
-        return {"reply": str(result)} 
-        
-    except Exception as e:
-        print(f"Errore Agent Orchestrator: {e}")
-        return {"reply": f"Il Regista ha avuto un mancamento: {str(e)}"}
+    raise HTTPException(410, 'Legacy process endpoint disabled; use authenticated agent tools')
 
 
 

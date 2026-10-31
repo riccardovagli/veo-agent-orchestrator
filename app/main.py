@@ -1,4 +1,3 @@
-from app.migration_gate import migration_tool
 from app.project_access import require_signed_project
 from fastapi import HTTPException
 from app.frame_extraction_tool import start_frame_extraction
@@ -135,7 +134,6 @@ def call_backend_agent_endpoint(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_visual_asset_zoom_out(
     project_id: str, user_id: str, project_context_token: str,
     node_id: str | None = None, asset_index: int | None = None,
@@ -169,7 +167,6 @@ async def prepare_visual_asset_zoom_out(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def copy_asset_between_nodes(
     project_id: str,
     user_id: str,
@@ -418,7 +415,6 @@ async def copy_asset_between_nodes(
         )
 
 @mcp.tool()
-@migration_tool(get_db)
 async def upsert_graph_node(
     project_id: str,
     user_id: str,
@@ -483,7 +479,6 @@ async def upsert_graph_node(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def get_graph_state(
     project_id: str,
     user_id: str,
@@ -505,7 +500,6 @@ async def get_graph_state(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def delete_graph_node(
     project_id: str,
     user_id: str,
@@ -529,7 +523,6 @@ async def delete_graph_node(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def merge_graph_nodes(
     project_id: str,
     user_id: str,
@@ -631,7 +624,6 @@ async def merge_graph_nodes(
         return f"❌ Errore merge_graph_nodes: {str(e)}"
 
 @mcp.tool()
-@migration_tool(get_db)
 async def rename_graph_node(
     project_id: str,
     user_id: str,
@@ -723,7 +715,6 @@ async def rename_graph_node(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_visual_asset_generation(
     project_id: str, user_id: str, project_context_token: str, node_id: str,
     asset_type: str, image_prompt: str, aspect_ratio: str = "16:9",
@@ -745,7 +736,6 @@ async def prepare_visual_asset_generation(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_visual_asset_edit(
     project_id: str, user_id: str, project_context_token: str,
     node_id: str | None = None, asset_index: int | None = None,
@@ -771,7 +761,6 @@ async def prepare_visual_asset_edit(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_visual_asset_composition(
     project_id: str, user_id: str, project_context_token: str,
     asset_node_ids: list[str] | None = None, asset_indexes: list[int] | None = None,
@@ -798,7 +787,6 @@ async def prepare_visual_asset_composition(
 
 
 #@mcp.tool()
-@migration_tool(get_db)
 async def prepare_scene_video_generation(
     project_id: str,
     user_id: str,
@@ -953,7 +941,6 @@ async def prepare_scene_video_generation(
 
 
 #@mcp.tool()
-@migration_tool(get_db)
 async def prepare_scene_video_generation_from_references(
     project_id: str,
     user_id: str,
@@ -1199,7 +1186,6 @@ async def prepare_scene_video_generation_from_references(
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_video_frame_extraction(
     project_id: str,
     user_id: str,
@@ -1230,7 +1216,6 @@ async def prepare_video_frame_extraction(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_scene_video_deletion(
     project_id: str,
     user_id: str,
@@ -1374,7 +1359,6 @@ async def prepare_scene_video_deletion(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def get_project_chat_context(
     project_id: str,
     user_id: str,
@@ -1466,7 +1450,6 @@ async def get_project_chat_context(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def prepare_visual_asset_deletion(
     project_id: str,
     user_id: str,
@@ -1534,7 +1517,6 @@ async def prepare_visual_asset_deletion(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_generation(
     project_id: str,
     user_id: str,
@@ -1718,7 +1700,6 @@ async def start_omni_video_generation(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_generation_from_references(
     project_id: str,
     user_id: str,
@@ -1942,7 +1923,6 @@ async def start_omni_video_generation_from_references(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_generation_from_frames(
     project_id: str,
     user_id: str,
@@ -2248,7 +2228,6 @@ async def start_omni_video_generation_from_frames(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_generation_from_frames_and_references(
     project_id: str,
     user_id: str,
@@ -2593,7 +2572,6 @@ async def start_omni_video_generation_from_frames_and_references(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_generation_from_previous_scene(
     project_id: str,
     user_id: str,
@@ -2788,7 +2766,6 @@ async def start_omni_video_generation_from_previous_scene(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_extension(
     project_id: str,
     user_id: str,
@@ -3003,7 +2980,6 @@ async def start_omni_video_extension(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_edit(
     project_id: str,
     user_id: str,
@@ -3128,7 +3104,6 @@ async def start_omni_video_edit(
 
 
 @mcp.tool()
-@migration_tool(get_db)
 async def start_omni_video_edit_with_references(
     project_id: str,
     user_id: str,
@@ -3376,9 +3351,6 @@ app = FastAPI(
     title="Regista-Orchestratore-Svisceratore",
     lifespan=mcp_app.router.lifespan_context,
 )
-
-from app.migration_gate import MigrationGate
-app.add_middleware(MigrationGate, db_factory=get_db, service="mcp")
 
 
 

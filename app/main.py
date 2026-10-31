@@ -1526,25 +1526,10 @@ async def start_omni_video_generation(
     scene_order: int,
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    """
-    Start an OMNI text-to-video generation for an existing scene node.
-
-    This tool starts the real backend generation immediately.
-
-    Use this tool when:
-    - the user wants to generate a video without first/last frames;
-    - the user does not want to use reference images;
-    - the scene should be generated from the textual video instruction only.
-
-    Do NOT use this tool for:
-    - reference-image video generation;
-    - first-frame generation;
-    - first-and-last-frame generation;
-    - extending an existing video.
-    """
+    '\n    Start an OMNI text-to-video generation for an existing scene node.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video without first/last frames;\n    - the user does not want to use reference images;\n    - the scene should be generated from the textual video instruction only.\n\n    Do NOT use this tool for:\n    - reference-image video generation;\n    - first-frame generation;\n    - first-and-last-frame generation;\n    - extending an existing video.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -1628,7 +1613,7 @@ async def start_omni_video_generation(
                         ensure_ascii=False,
                     )
 
-        if duration < 3 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps(
                 {
                     "error":
@@ -1642,7 +1627,7 @@ async def start_omni_video_generation(
             "prompt": clean_instruction,
             "aspect_ratio": aspect_ratio,
             "resolution": resolution,
-            "duration": duration,
+            **({"duration": duration} if duration is not None else {}),
             "scene_order": scene_order,
             "node_id": scene_node_id,
             "source": "agent",
@@ -1711,9 +1696,10 @@ async def start_omni_video_generation_from_references(
     reference_asset_indexes: list[int],
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
+    'For OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -1748,7 +1734,7 @@ async def start_omni_video_generation_from_references(
                 "error": "resolution must be one of: 360p, 720p, 1080p, 4k"
             }, ensure_ascii=False)
 
-        if duration < 3 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps({
                 "error": "duration must be between 3 and 10 seconds"
             }, ensure_ascii=False)
@@ -1887,7 +1873,7 @@ async def start_omni_video_generation_from_references(
                 "prompt": instruction,
                 "aspect_ratio": aspect_ratio,
                 "resolution": resolution,
-                "duration": duration,
+                **({"duration": duration} if duration is not None else {}),
                 "scene_order": scene_order,
                 "source": "agent",
                 "node_id": scene_node_id,
@@ -1938,27 +1924,10 @@ async def start_omni_video_generation_from_frames(
 
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    """
-    Start an OMNI image-to-video generation.
-
-    This tool starts the real backend generation immediately.
-
-    Use this tool when:
-    - the user wants to generate a video from an existing first frame;
-    - optionally, the user also specifies an existing last frame.
-
-    Do NOT use this tool for:
-    - text-only video generation;
-    - reference-image video generation;
-    - extending an existing video.
-
-    The first frame is mandatory.
-    The last frame is optional.
-    If a last frame is used, both node id and asset index are required.
-    """
+    '\n    Start an OMNI image-to-video generation.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video from an existing first frame;\n    - optionally, the user also specifies an existing last frame.\n\n    Do NOT use this tool for:\n    - text-only video generation;\n    - reference-image video generation;\n    - extending an existing video.\n\n    The first frame is mandatory.\n    The last frame is optional.\n    If a last frame is used, both node id and asset index are required.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2042,7 +2011,7 @@ async def start_omni_video_generation_from_frames(
                 ensure_ascii=False,
             )
 
-        if duration < 3 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps(
                 {
                     "error":
@@ -2153,7 +2122,7 @@ async def start_omni_video_generation_from_frames(
             "prompt": clean_instruction,
             "aspect_ratio": aspect_ratio,
             "resolution": resolution,
-            "duration": duration,
+            **({"duration": duration} if duration is not None else {}),
             "scene_order": scene_order,
             "node_id": scene_node_id,
             "source": "agent",
@@ -2248,18 +2217,10 @@ async def start_omni_video_generation_from_frames_and_references(
 
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    """
-    Start an OMNI video generation using:
-    - a first frame;
-    - a last frame;
-    - one or more reference images.
-
-    The first frame and last frame are mandatory.
-    Reference images are resolved from graph node ids and asset indexes.
-    """
+    '\n    Start an OMNI video generation using:\n    - a first frame;\n    - a last frame;\n    - one or more reference images.\n\n    The first frame and last frame are mandatory.\n    Reference images are resolved from graph node ids and asset indexes.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2311,7 +2272,7 @@ async def start_omni_video_generation_from_frames_and_references(
                 ensure_ascii=False,
             )
 
-        if duration < 3 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps(
                 {
                     "error":
@@ -2493,7 +2454,7 @@ async def start_omni_video_generation_from_frames_and_references(
             "prompt": clean_instruction,
             "aspect_ratio": aspect_ratio,
             "resolution": resolution,
-            "duration": duration,
+            **({"duration": duration} if duration is not None else {}),
             "scene_order": scene_order,
             "node_id": scene_node_id,
             "source": "agent",
@@ -2582,24 +2543,10 @@ async def start_omni_video_generation_from_previous_scene(
     scene_order: int,
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    """
-    Start a new OMNI video generation using the final frame
-    of a previous scene as the first frame of the new scene.
-
-    This is a new image-to-video generation, not a native
-    OMNI video extension.
-
-    The backend handles:
-    - resolving the completed video of the previous scene;
-    - extracting its final frame;
-    - using that frame as the first frame;
-    - starting the OMNI generation.
-
-    Returns immediately with a PROCESSING job.
-    """
+    '\n    Start a new OMNI video generation using the final frame\n    of a previous scene as the first frame of the new scene.\n\n    This is a new image-to-video generation, not a native\n    OMNI video extension.\n\n    The backend handles:\n    - resolving the completed video of the previous scene;\n    - extracting its final frame;\n    - using that frame as the first frame;\n    - starting the OMNI generation.\n\n    Returns immediately with a PROCESSING job.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2667,7 +2614,7 @@ async def start_omni_video_generation_from_previous_scene(
                 ensure_ascii=False,
             )
 
-        if duration < 3 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps(
                 {
                     "error": (
@@ -2728,7 +2675,7 @@ async def start_omni_video_generation_from_previous_scene(
                     previous_scene_node_id,
                 "aspect_ratio": aspect_ratio,
                 "resolution": resolution,
-                "duration": duration,
+                **({"duration": duration} if duration is not None else {}),
                 "scene_order": scene_order,
                 "source": "agent",
                 "node_id": scene_node_id,
@@ -2774,24 +2721,10 @@ async def start_omni_video_extension(
     source_job_id: str,
     instruction: str,
     scene_order: int,
-    duration: int = 8,
+    duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    """
-    Start an OMNI video extension.
-
-    This tool starts the real backend generation immediately.
-
-    Use this tool when:
-    - the user wants to extend an existing completed video;
-    - the source video is identified by source_job_id.
-
-    Do NOT use this tool for:
-    - text-only video generation;
-    - reference-image video generation;
-    - first-frame generation;
-    - first-and-last-frame generation.
-    """
+    '\n    Start an OMNI video extension.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to extend an existing completed video;\n    - the source video is identified by source_job_id.\n\n    Do NOT use this tool for:\n    - text-only video generation;\n    - reference-image video generation;\n    - first-frame generation;\n    - first-and-last-frame generation.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2817,11 +2750,11 @@ async def start_omni_video_extension(
                 ensure_ascii=False,
             )
 
-        if duration < 1 or duration > 10:
+        if duration is not None and (type(duration) is not int or duration < 3 or duration > 10):
             return json.dumps(
                 {
                     "error":
-                        "duration must be between 1 and 10 seconds"
+                        "duration must be between 3 and 10 seconds, or omitted"
                 },
                 ensure_ascii=False,
             )
@@ -2920,7 +2853,7 @@ async def start_omni_video_extension(
         payload = {
             "project_id": project_id,
             "prompt": clean_instruction,
-            "duration": duration,
+            **({"duration": duration} if duration is not None else {}),
             "scene_order": scene_order,
             "node_id": scene_node_id,
             "source": "agent",

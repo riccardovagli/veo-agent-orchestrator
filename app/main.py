@@ -2206,21 +2206,25 @@ async def start_omni_video_generation_from_frames_and_references(
     first_frame_node_id: str,
     first_frame_asset_index: int,
 
-    last_frame_node_id: str,
-    last_frame_asset_index: int,
-
     reference_node_ids: list[str],
     reference_asset_indexes: list[int],
 
     instruction: str,
     scene_order: int,
 
+    last_frame_node_id: str | None = None,
+    last_frame_asset_index: int | None = None,
     aspect_ratio: str = "16:9",
     resolution: str = "1080p",
     duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    '\n    Start an OMNI video generation using:\n    - a first frame;\n    - a last frame;\n    - one or more reference images.\n\n    The first frame and last frame are mandatory.\n    Reference images are resolved from graph node ids and asset indexes.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 10. Do not invent a duration in instruction when duration is omitted.'
+    """Generate OMNI video from a first frame and reference images.
+    Last frame is optional: supply both last_frame_node_id and last_frame_asset_index, or neither.
+    At most 10 images total: first + up to 9 references; first + last + up to 8 references.
+    Omit duration unless the user explicitly requested seconds (3 to 10).
+    Never invent a final frame or numeric duration.
+    """
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2303,11 +2307,15 @@ async def start_omni_video_generation_from_frames_and_references(
                 ensure_ascii=False,
             )
 
-        if len(reference_node_ids) > 10:
+        if (last_frame_node_id is None) != (last_frame_asset_index is None):
+            return json.dumps({"error":"Supply both last-frame node and index, or neither."}, ensure_ascii=False)
+        if last_frame_asset_index is not None and (type(last_frame_asset_index) is not int or last_frame_asset_index < 0):
+            return json.dumps({"error":"Invalid last-frame asset index."}, ensure_ascii=False)
+        if len(reference_node_ids) + 1 + (last_frame_node_id is not None) > 10:
             return json.dumps(
                 {
                     "error":
-                        "OMNI supports a maximum of 10 reference images"
+                        "OMNI supports 10 total images, including first and optional last frames"
                 },
                 ensure_ascii=False,
             )
@@ -2392,11 +2400,10 @@ async def start_omni_video_generation_from_frames_and_references(
                 "First frame",
             )
 
-            last_frame_asset_id = resolve_asset_id(
-                last_frame_node_id,
-                last_frame_asset_index,
-                "Last frame",
-            )
+            last_frame_asset_id = None
+            if last_frame_node_id is not None:
+                last_frame_asset_id = resolve_asset_id(
+                    last_frame_node_id, last_frame_asset_index, "Last frame")
 
         except ValueError as e:
             return json.dumps(
@@ -2460,7 +2467,7 @@ async def start_omni_video_generation_from_frames_and_references(
             "source": "agent",
             "variant": variant,
             "first_frame_asset_id": first_frame_asset_id,
-            "last_frame_asset_id": last_frame_asset_id,
+            **({"last_frame_asset_id":last_frame_asset_id} if last_frame_asset_id is not None else {}),
             "asset_ids": asset_ids,
         }
 

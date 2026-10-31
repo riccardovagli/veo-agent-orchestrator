@@ -3334,3 +3334,63 @@ for route in app.routes:
 print("===== MCP APP ROUTES =====")
 for route in getattr(mcp_app, "routes", []):
     print(route)
+
+@mcp.tool()
+async def start_omni_video_generation_from_selected_assets(
+    project_id: str, user_id: str, project_context_token: str,
+    instruction: str, reference_asset_ids: list[str],
+    first_frame_asset_id: str | None = None,
+    last_frame_asset_id: str | None = None,
+    scene_node_id: str | None = None, scene_order: int = 0,
+    aspect_ratio: str = "16:9", resolution: str = "1080p",
+    duration: int | None = None,
+) -> str:
+    """Start one NEW OMNI clip from verified chat attachments, using their asset_id and explicit role.
+    Copy IDs from this turn's verified selected assets, never invent node IDs or reinterpret mention text.
+    first_frame_asset_id is the selected first frame; last is optional and requires first.
+    reference_asset_ids contains only reference-role attachments. At most 10 total images.
+    Supports images without graph nodes. Leave duration absent unless the user explicitly asks seconds.
+    Return after acceptance; delivery uses existing SSE. Never poll or repeat an uncertain submission.
+    """
+    error = validate_graph_request(project_id, user_id, project_context_token)
+    if error:
+        return json.dumps({"error":str(error)}, ensure_ascii=False)
+    if not isinstance(instruction, str) or not instruction.strip():
+        return json.dumps({"error":"Descrivi la clip."}, ensure_ascii=False)
+    if not isinstance(reference_asset_ids, list):
+        return json.dumps({"error":"Riferimenti non validi."}, ensure_ascii=False)
+    images = [*reference_asset_ids, *([first_frame_asset_id] if first_frame_asset_id else []),
+              *([last_frame_asset_id] if last_frame_asset_id else [])]
+    if (not images or len(images) > 10 or any(not isinstance(v,str) or not v or '/' in v or len(v)>200 for v in images)
+            or len(set(reference_asset_ids)) != len(reference_asset_ids)):
+        return json.dumps({"error":"Seleziona da 1 a 10 immagini valide, senza riferimenti duplicati."}, ensure_ascii=False)
+    if last_frame_asset_id and not first_frame_asset_id:
+        return json.dumps({"error":"L’ultimo frame richiede un primo frame."}, ensure_ascii=False)
+    if (aspect_ratio not in ("16:9", "9:16") or resolution not in ("360p", "720p", "1080p", "4k")
+            or (duration is not None and (type(duration) is not int or not 3 <= duration <= 10))):
+        return json.dumps({"error":"Parametri OMNI non validi."}, ensure_ascii=False)
+    payload = {"project_id":project_id, "prompt":instruction.strip(), "source":"agent",
+               "aspect_ratio":aspect_ratio, "resolution":resolution, "scene_order":scene_order,
+               "node_id":scene_node_id}
+    if duration is not None:
+        payload['duration'] = duration
+    if first_frame_asset_id:
+        payload['first_frame_asset_id'] = first_frame_asset_id
+        if last_frame_asset_id:
+            payload['last_frame_asset_id'] = last_frame_asset_id
+        suffix = '-from-frames-and-references' if reference_asset_ids else '-from-frames'
+    else:
+        suffix = '-from-references'
+    if reference_asset_ids:
+        payload['asset_ids'] = reference_asset_ids
+    try:
+        result = call_backend_agent_endpoint('/agent/create-omni-video'+suffix, payload,
+            user_id=user_id, project_context_token=project_context_token)
+        if not result.get('jobId'):
+            return json.dumps({"error":"Conferma priva di jobId. Non ripetere automaticamente."}, ensure_ascii=False)
+        return json.dumps({"action":"omni_video_started", "generation_type":"selected_assets",
+            "job_id":result['jobId'], "node_id":result.get('nodeId'), "scene_node_id":result.get('nodeId'),
+            "scene_order":scene_order, "status":result.get('status') or 'PROCESSING',
+            "message":"Clip presa in carico. Rispondi ora; il risultato arriverà via SSE. Non attendere o ripetere."}, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"error":"Esito dell’avvio non confermato. Non ripetere automaticamente la richiesta."}, ensure_ascii=False)

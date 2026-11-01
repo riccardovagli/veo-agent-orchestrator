@@ -3394,3 +3394,8 @@ async def start_omni_video_generation_from_selected_assets(
             "message":"Clip presa in carico. Rispondi ora; il risultato arriverà via SSE. Non attendere o ripetere."}, ensure_ascii=False)
     except Exception:
         return json.dumps({"error":"Esito dell’avvio non confermato. Non ripetere automaticamente la richiesta."}, ensure_ascii=False)
+
+
+# Targeted, revision-checked project tools for the separate Stanley agent.
+from app.stanley_project_tools import register_stanley_tools
+register_stanley_tools(mcp, get_db, validate_graph_request)

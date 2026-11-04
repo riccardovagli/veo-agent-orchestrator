@@ -3,6 +3,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime
 import re
+import unicodedata
 
 from google.cloud import firestore
 
@@ -35,6 +36,8 @@ def register_stanley_tools(mcp, get_db, validate_graph_request):
                                    node_ids: list[str] | None = None, query: str = '',
                                    offset: int = 0, limit: int = 20) -> dict:
         """Read relevant project graph nodes. Empty selection returns a compact index.
+        Query names treat spaces/underscores/hyphens equivalently. A query ending
+        in asset N selects that exact variant in asset_matches, including its UUID.
         Select node_ids to get full narrative content and asset/job identifiers.
         graph_revision is required for the subsequent validated write.
         """
@@ -46,9 +49,19 @@ def register_stanley_tools(mcp, get_db, validate_graph_request):
         def read():
             snap = get_db().collection('agent_orchestration_state').document(project_id).get()
             nodes = (snap.to_dict() or {}).get('graph_nodes') or {}
+            def normalize(value):
+                value = unicodedata.normalize('NFKC', str(value)).casefold()
+                return ' '.join(re.sub(r'[_\-·]+', ' ', value).split())
+            requested_index = None
+            label = query.strip()
+            parsed = re.search(r'(?:\s|·)+asset\s+(\d+)\s*$', label, re.I)
+            if parsed:
+                requested_index = int(parsed.group(1))
+                label = label[:parsed.start()].strip()
+            needle = normalize(label)
             matches = [(key, node) for key, node in sorted(nodes.items())
                        if (not node_ids or key in node_ids)
-                       and (not query or query.casefold() in (key+' '+str(node.get('content', ''))).casefold())]
+                       and (not needle or needle in normalize(key+' '+str(node.get('content', ''))))]
             selected = matches[offset:offset+limit]
             fields = ('type', 'content', 'status', 'depends_on', 'generated_assets',
                       'generated_videos', 'video_jobs', 'video_job_id', 'last_video_job_id',
@@ -68,7 +81,23 @@ def register_stanley_tools(mcp, get_db, validate_graph_request):
                 for node in result.values():
                     node['content'] = str(node.get('content', ''))[:240]
                     node.pop('generated_assets', None);node.pop('generated_videos', None)
-            return {'nodes':result, 'total_matches':len(matches),
+            asset_matches = []
+            if query.strip():
+                for key, node in selected:
+                    for position, asset in enumerate(node.get('generated_assets') or []):
+                        if not isinstance(asset, dict) or not asset.get('asset_id'):
+                            continue
+                        try:
+                            index = int(asset.get('asset_index', position))
+                        except (TypeError, ValueError):
+                            continue
+                        if requested_index is not None and index != requested_index:
+                            continue
+                        asset_matches.append({'asset_id':asset['asset_id'], 'node_id':key,
+                            'asset_index':index, 'asset_type':asset.get('asset_type'),
+                            'mention':key+' · asset '+str(index)})
+            return {'nodes':result, 'asset_matches':asset_matches[:40],
+                    'asset_matches_truncated':len(asset_matches)>40, 'total_matches':len(matches),
                     'next_offset':offset+limit if offset+limit < len(matches) else None,
                     'graph_revision':snap.update_time.isoformat() if snap.exists else 'absent'}
         return await asyncio.to_thread(read)

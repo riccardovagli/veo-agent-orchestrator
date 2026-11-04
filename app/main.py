@@ -95,37 +95,13 @@ def replace_dependency(depends_on: list[str], old_node_id: str, new_node_id: str
 
     return result
 
-def call_backend_agent_endpoint(
-    endpoint: str,
-    payload: dict,
-    *, user_id: str, project_context_token: str,
-) -> dict:
-    response = requests.post(
-        f"{BACKEND_URL}{endpoint}",
-        json=payload,
-        headers={
-            "X-FrameButcher-Internal-Token":
-                BACKEND_INTERNAL_TOKEN,
-            "X-FrameButcher-User-Id": user_id,
-            "X-FrameButcher-Project-Context": project_context_token,
-        },
-        timeout=20,
-    )
-
-    if not response.ok:
-        raise RuntimeError(
-            f"Backend HTTP {response.status_code}: "
-            f"{response.text}"
-        )
-
-    try:
-        return response.json()
-
-    except Exception:
-        raise RuntimeError(
-            f"Backend returned invalid JSON: "
-            f"{response.text}"
-        )
+def call_backend_agent_endpoint(endpoint: str, payload: dict, *, user_id: str, project_context_token: str) -> dict:
+    from app.backend_errors import post_backend
+    return post_backend(f"{BACKEND_URL}{endpoint}", payload, {
+        "X-FrameButcher-Internal-Token": BACKEND_INTERNAL_TOKEN,
+        "X-FrameButcher-User-Id": user_id,
+        "X-FrameButcher-Project-Context": project_context_token,
+    }, endpoint)
 
 
 
@@ -3387,15 +3363,24 @@ async def start_omni_video_generation_from_selected_assets(
         result = call_backend_agent_endpoint('/agent/create-omni-video'+suffix, payload,
             user_id=user_id, project_context_token=project_context_token)
         if not result.get('jobId'):
-            return json.dumps({"error":"Conferma priva di jobId. Non ripetere automaticamente."}, ensure_ascii=False)
+            return json.dumps({"error":"Conferma priva di jobId. Non ripetere automaticamente.", "code":"BACKEND_INVALID_RECEIPT", "uncertain":True, "retryable":False}, ensure_ascii=False)
         return json.dumps({"action":"omni_video_started", "generation_type":"selected_assets",
             "job_id":result['jobId'], "node_id":result.get('nodeId'), "scene_node_id":result.get('nodeId'),
             "scene_order":scene_order, "status":result.get('status') or 'PROCESSING',
             "message":"Clip presa in carico. Rispondi ora; il risultato arriverà via SSE. Non attendere o ripetere."}, ensure_ascii=False)
-    except Exception:
-        return json.dumps({"error":"Esito dell’avvio non confermato. Non ripetere automaticamente la richiesta."}, ensure_ascii=False)
+    except Exception as error:
+        from app.backend_errors import BackendAgentError
+        if isinstance(error, BackendAgentError):
+            return json.dumps(error.result(), ensure_ascii=False)
+        __import__('logging').getLogger(__name__).exception('selected_assets_start_failed')
+        return json.dumps({"error":"Errore interno nell’avvio. Verificare gli eventuali job prima di riprovare.",
+                           "code":"MCP_INTERNAL_ERROR", "uncertain":True, "retryable":False}, ensure_ascii=False)
 
 
 # Targeted, revision-checked project tools for the separate Stanley agent.
 from app.stanley_project_tools import register_stanley_tools
 register_stanley_tools(mcp, get_db, validate_graph_request)
+
+from app.asset_move_tool import register_asset_move_tool
+register_asset_move_tool(mcp, call_backend_agent_endpoint, validate_graph_request)
+

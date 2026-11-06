@@ -3386,6 +3386,9 @@ async def start_omni_video_generation_from_selected_assets(
 from app.stanley_project_tools import register_stanley_tools
 register_stanley_tools(mcp, get_db, validate_graph_request)
 
+from app.sequence_tool import register_sequence_tool
+register_sequence_tool(mcp, validate_graph_request, call_backend_agent_endpoint)
+
 from app.asset_move_tool import register_asset_move_tool
 register_asset_move_tool(mcp, call_backend_agent_endpoint, validate_graph_request)
 

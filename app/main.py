@@ -1505,7 +1505,7 @@ async def start_omni_video_generation(
     duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    '\n    Start an OMNI text-to-video generation for an existing scene node.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video without first/last frames;\n    - the user does not want to use reference images;\n    - the scene should be generated from the textual video instruction only.\n\n    Do NOT use this tool for:\n    - reference-image video generation;\n    - first-frame generation;\n    - first-and-last-frame generation;\n    - extending an existing video.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 15 (3 to 10 when a last frame is supplied). Do not invent a duration in instruction when duration is omitted.'
+    '\n    Start an OMNI text-to-video generation for an existing scene node.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video without first/last frames;\n    - the user does not want to use reference images;\n    - the scene should be generated from the textual video instruction only.\n\n    Do NOT use this tool for:\n    - reference-image video generation;\n    - first-frame generation;\n    - first-and-last-frame generation;\n    - extending an existing video.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; the backend validates explicit duration against the configured OMNI model. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -1593,7 +1593,7 @@ async def start_omni_video_generation(
             return json.dumps(
                 {
                     "error":
-                        "duration must be 3 to 15 seconds; 3 to 10 with a last frame"
+                        "Invalid OMNI duration"
                 },
                 ensure_ascii=False,
             )
@@ -1675,7 +1675,7 @@ async def start_omni_video_generation_from_references(
     duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    'For OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 15 (3 to 10 when a last frame is supplied). Do not invent a duration in instruction when duration is omitted.'
+    'For OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; the backend validates explicit duration against the configured OMNI model. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -1712,7 +1712,7 @@ async def start_omni_video_generation_from_references(
 
         if duration is not None and (type(duration) is not int or duration < 3 or duration > 15):
             return json.dumps({
-                "error": "duration must be 3 to 15 seconds; 3 to 10 with a last frame"
+                "error": "Invalid OMNI duration"
             }, ensure_ascii=False)
 
         if not reference_node_ids or not reference_asset_indexes:
@@ -1903,7 +1903,7 @@ async def start_omni_video_generation_from_frames(
     duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    '\n    Start an OMNI image-to-video generation.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video from an existing first frame;\n    - optionally, the user also specifies an existing last frame.\n\n    Do NOT use this tool for:\n    - text-only video generation;\n    - reference-image video generation;\n    - extending an existing video.\n\n    The first frame is mandatory.\n    The last frame is optional.\n    If a last frame is used, both node id and asset index are required.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 15 (3 to 10 when a last frame is supplied). Do not invent a duration in instruction when duration is omitted.'
+    '\n    Start an OMNI image-to-video generation.\n\n    This tool starts the real backend generation immediately.\n\n    Use this tool when:\n    - the user wants to generate a video from an existing first frame;\n    - optionally, the user also specifies an existing last frame.\n\n    Do NOT use this tool for:\n    - text-only video generation;\n    - reference-image video generation;\n    - extending an existing video.\n\n    The first frame is mandatory.\n    The last frame is optional.\n    If a last frame is used, both node id and asset index are required.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; the backend validates explicit duration against the configured OMNI model. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -1991,7 +1991,7 @@ async def start_omni_video_generation_from_frames(
             return json.dumps(
                 {
                     "error":
-                        "duration must be 3 to 15 seconds; 3 to 10 with a last frame"
+                        "Invalid OMNI duration"
                 },
                 ensure_ascii=False,
             )
@@ -2198,7 +2198,7 @@ async def start_omni_video_generation_from_frames_and_references(
     """Generate OMNI video from a first frame and reference images.
     Last frame is optional: supply both last_frame_node_id and last_frame_asset_index, or neither.
     At most 10 images total: first + up to 9 references; first + last + up to 8 references.
-    Omit duration unless the user explicitly requested seconds (3 to 15; with a last frame, 3 to 10).
+    Omit duration unless the user explicitly requested seconds.
     Never invent a final frame or numeric duration.
     """
     access_error = validate_graph_request(project_id, user_id, project_context_token)
@@ -2256,7 +2256,7 @@ async def start_omni_video_generation_from_frames_and_references(
             return json.dumps(
                 {
                     "error":
-                        "duration must be 3 to 15 seconds; 3 to 10 with a last frame"
+                        "Invalid OMNI duration"
                 },
                 ensure_ascii=False,
             )
@@ -2529,7 +2529,7 @@ async def start_omni_video_generation_from_previous_scene(
     duration: int | None = None,
     variant: str | None = None,
 ) -> str:
-    '\n    Start a new OMNI video generation using the final frame\n    of a previous scene as the first frame of the new scene.\n\n    This is a new image-to-video generation, not a native\n    OMNI video extension.\n\n    The backend handles:\n    - resolving the completed video of the previous scene;\n    - extracting its final frame;\n    - using that frame as the first frame;\n    - starting the OMNI generation.\n\n    Returns immediately with a PROCESSING job.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; explicit duration must be an integer from 3 to 15 (3 to 10 when a last frame is supplied). Do not invent a duration in instruction when duration is omitted.'
+    '\n    Start a new OMNI video generation using the final frame\n    of a previous scene as the first frame of the new scene.\n\n    This is a new image-to-video generation, not a native\n    OMNI video extension.\n\n    The backend handles:\n    - resolving the completed video of the previous scene;\n    - extracting its final frame;\n    - using that frame as the first frame;\n    - starting the OMNI generation.\n\n    Returns immediately with a PROCESSING job.\n    \nFor OMNI, omit duration unless the user explicitly requested seconds. None leaves duration unspecified; the backend validates explicit duration against the configured OMNI model. Do not invent a duration in instruction when duration is omitted.'
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
         return {'error': access_error}
@@ -2914,8 +2914,6 @@ async def start_omni_video_edit(
     without using additional reference images.
 
     source_job_id identifies the existing video to edit.
-    OMNI 1.2 editing preserves the source duration (3 to 15 seconds).
-    This tool does not accept an output-duration override.
     """
     access_error = validate_graph_request(project_id, user_id, project_context_token)
     if access_error:
@@ -3037,9 +3035,7 @@ async def start_omni_video_edit_with_references(
 ) -> str:
     """
     Edit an existing OMNI video using a textual instruction
-    and one or two existing image references.
-    OMNI 1.2 preserves the source duration (3 to 15 seconds).
-    There is no output-duration override in this tool.
+    and one or more existing image references.
 
     Use this tool for replacements or insertions where the
     appearance of the new object, character, environment or
@@ -3111,11 +3107,11 @@ async def start_omni_video_edit_with_references(
                 ensure_ascii=False,
             )
 
-        if len(reference_node_ids) > 2:
+        if len(reference_node_ids) > 10:
             return json.dumps(
                 {
                     "error":
-                        "OMNI 1.2 video editing supports at most 2 reference images"
+                        "A maximum of 10 reference images is supported"
                 },
                 ensure_ascii=False,
             )
@@ -3329,7 +3325,7 @@ async def start_omni_video_generation_from_selected_assets(
     Copy IDs from this turn's verified selected assets, never invent node IDs or reinterpret mention text.
     first_frame_asset_id is the selected first frame; last is optional and requires first.
     reference_asset_ids contains only reference-role attachments. At most 10 total images.
-    Explicit duration: 3 to 15 seconds, or 3 to 10 with last_frame_asset_id.
+    The backend validates duration against the configured OMNI model.
     Supports images without graph nodes. Leave duration absent unless the user explicitly asks seconds.
     Return after acceptance; delivery uses existing SSE. Never poll or repeat an uncertain submission.
     """

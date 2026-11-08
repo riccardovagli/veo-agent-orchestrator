@@ -3382,6 +3382,26 @@ async def start_omni_video_generation_from_selected_assets(
 from app.stanley_project_tools import register_stanley_tools
 register_stanley_tools(mcp, get_db, validate_graph_request)
 
+
+@mcp.tool()
+async def read_stanley_image_previews(
+    project_id: str,
+    user_id: str,
+    project_context_token: str,
+    asset_ids: list[str],
+) -> dict:
+    """Fetch temporary previews for up to four verified project image assets."""
+    import asyncio
+    from app.backend_errors import BackendAgentError
+    try:
+        return await asyncio.to_thread(
+            call_backend_agent_endpoint,
+            "/agent/read-image-previews", {"project_id": project_id, "asset_ids": asset_ids},
+            user_id=user_id, project_context_token=project_context_token,
+        )
+    except BackendAgentError:
+        return {"error": "Anteprime non disponibili."}
+
 from app.sequence_tool import register_sequence_tool
 register_sequence_tool(mcp, validate_graph_request, call_backend_agent_endpoint)
 

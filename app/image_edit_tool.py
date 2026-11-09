@@ -5,8 +5,9 @@ import httpx
 
 async def start_image_edit(project_id, user_id, project_context_token, node_id=None,
                            asset_index=None, instruction='', aspect_ratio=None,
-                           variant=None, asset_id=None, request_id=None):
+                           variant=None, asset_id=None, request_id=None, image_size=None):
     payload = {
+        "image_size": image_size,
         'project_id':project_id, 'user_id':user_id, 'project_context_token':project_context_token,
         'node_id':node_id, 'asset_index':asset_index, 'asset_id':asset_id,
         'instruction':instruction, 'aspect_ratio':aspect_ratio, 'variant':variant,

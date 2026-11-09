@@ -7,10 +7,12 @@ import httpx
 async def start_image_generation(
     project_id, user_id, project_context_token, node_id, asset_type, image_prompt,
     aspect_ratio="16:9", model_version="3.1", request_id=None,
+    image_size=None,
 ):
     # Backend validates the signed context, project and inputs. No Firestore
     # writes and no image generation are performed in this MCP process.
     payload = {
+        "image_size": image_size,
         "project_id": project_id, "user_id": user_id,
         "project_context_token": project_context_token,
         "node_id": node_id, "type": asset_type, "prompt": image_prompt,

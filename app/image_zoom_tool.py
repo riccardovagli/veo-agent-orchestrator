@@ -6,8 +6,9 @@ import httpx
 async def start_image_zoom_out(project_id, user_id, project_context_token,
                                node_id=None, asset_index=None, scale_factor=0.7,
                                instruction=None, variant=None, mode='hybrid',
-                               asset_id=None, request_id=None, aspect_ratio=None):
+                               asset_id=None, request_id=None, aspect_ratio=None, image_size=None):
     payload = {
+        "image_size": image_size,
         'project_id':project_id, 'user_id':user_id, 'project_context_token':project_context_token,
         'node_id':node_id, 'asset_index':asset_index, 'asset_id':asset_id,
         'scale_factor':scale_factor, 'instruction':instruction, 'variant':variant,

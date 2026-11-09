@@ -13,6 +13,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel
 
 import os
+from typing import Literal
 import hmac
 import hashlib
 
@@ -117,8 +118,9 @@ async def prepare_visual_asset_zoom_out(
     variant: str | None = None, mode: str = "hybrid",
     asset_id: str | None = None, request_id: str | None = None,
     aspect_ratio: str | None = None,
+    image_size: Literal["2K", "4K"] | None = None,
 ) -> dict:
-    """Generate a wider framing in 4K with Nano Banana 2.1 from one original image.
+    """Generate a wider framing with Nano Banana 2.1 from one original image.
 
     Select asset_id from a chat attachment or node_id and asset_index.
     scale_factor controls the size of the whole original image fitted inside
@@ -136,6 +138,7 @@ async def prepare_visual_asset_zoom_out(
     return await start_image_zoom_out(
         project_id, user_id, project_context_token, node_id, asset_index,
         scale_factor, instruction, variant, mode, asset_id, request_id, aspect_ratio,
+        image_size=image_size,
     )
         
 
@@ -695,6 +698,7 @@ async def prepare_visual_asset_generation(
     project_id: str, user_id: str, project_context_token: str, node_id: str,
     asset_type: str, image_prompt: str, aspect_ratio: str = "16:9",
     model_version: str = "2.1", request_id: str | None = None,
+    image_size: Literal["2K", "4K"] | None = None,
 ) -> dict:
     """Start a real Nano Banana 2.1 image job, then respond to the user.
 
@@ -708,6 +712,7 @@ async def prepare_visual_asset_generation(
     return await start_image_generation(
         project_id, user_id, project_context_token, node_id, asset_type,
         image_prompt, aspect_ratio, model_version, request_id,
+        image_size=image_size,
     )
 
 
@@ -718,6 +723,7 @@ async def prepare_visual_asset_edit(
     instruction: str = "", aspect_ratio: str | None = None,
     variant: str | None = None, asset_id: str | None = None,
     request_id: str | None = None,
+    image_size: Literal["2K", "4K"] | None = None,
 ) -> dict:
     """Start editing exactly one existing project image, then respond immediately.
 
@@ -733,6 +739,7 @@ async def prepare_visual_asset_edit(
     return await start_image_edit(
         project_id, user_id, project_context_token, node_id, asset_index,
         instruction, aspect_ratio, variant, asset_id, request_id,
+        image_size=image_size,
     )
 
 
@@ -743,6 +750,7 @@ async def prepare_visual_asset_composition(
     instruction: str = "", aspect_ratio: str = "1:1",
     node_id: str | None = None, variant: str | None = None,
     asset_ids: list[str] | None = None, request_id: str | None = None,
+    image_size: Literal["2K", "4K"] | None = None,
 ) -> dict:
     """Compose 2 to 14 distinct project images with Nano Banana 2.1.
 
@@ -759,6 +767,7 @@ async def prepare_visual_asset_composition(
     return await start_image_composition(
         project_id, user_id, project_context_token, asset_node_ids, asset_indexes,
         instruction, aspect_ratio, node_id, variant, asset_ids, request_id,
+        image_size=image_size,
     )
 
 

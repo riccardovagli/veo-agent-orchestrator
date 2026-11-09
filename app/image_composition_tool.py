@@ -6,8 +6,9 @@ import httpx
 async def start_image_composition(project_id, user_id, project_context_token,
                                   asset_node_ids=None, asset_indexes=None, instruction='',
                                   aspect_ratio='1:1', node_id=None, variant=None,
-                                  asset_ids=None, request_id=None):
+                                  asset_ids=None, request_id=None, image_size=None):
     payload = {
+        "image_size": image_size,
         'project_id':project_id, 'user_id':user_id, 'project_context_token':project_context_token,
         'asset_node_ids':asset_node_ids, 'asset_indexes':asset_indexes, 'asset_ids':asset_ids,
         'instruction':instruction, 'aspect_ratio':aspect_ratio, 'node_id':node_id,

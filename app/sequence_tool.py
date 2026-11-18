@@ -6,9 +6,11 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
     async def start_omni_sequence(project_id:str,user_id:str,project_context_token:str,
             request_id:str,original_instruction:str,frame_asset_ids:list[str],
             segment_instructions:list[str],resolution:str,aspect_ratio:str,
-            segment_durations:list[int | None] | None=None) -> str:
-        """Start ONE final sequence from 3–14 ORDERED verified frame UUIDs.
-        For N frames supply N-1 optimized prompts: frames[0]->frames[1], etc.
+            segment_durations:list[int | None] | None=None,open_ending:bool=False) -> str:
+        """Render one approved sequence from ordered, verified frame UUIDs.
+        Use N-1 prompts with a fixed ending or N with open_ending=True.
+        In open mode the last clip receives its first frame only.
+        Call only after user approval if any keyframes were generated for this plan.
         All clips render independently in parallel, then the backend concatenates them.
         Each duration is 3–10 seconds or None for automatic. If omitted all are automatic.
         A user total duration must be distributed across segments, never copied to each.
@@ -18,9 +20,10 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         """
         error=validate_graph_request(project_id,user_id,project_context_token)
         if error:return json.dumps({'error':str(error)},ensure_ascii=False)
-        if (not 3<=len(frame_asset_ids)<=14 or len(segment_instructions)!=len(frame_asset_ids)-1
+        expected = len(frame_asset_ids) - (0 if open_ending else 1)
+        if (not 2<=expected<=13 or len(frame_asset_ids)>14 or len(segment_instructions)!=expected
                 or (segment_durations is not None and len(segment_durations)!=len(segment_instructions))):
-            return json.dumps({'error':'Piano non valido: servono N frame e N-1 istruzioni/durate.'})
+            return json.dumps({'error':'Piano non valido: servono da 2 a 13 clip, una per coppia più il finale libero se richiesto.'})
         durations=segment_durations if segment_durations is not None else [None]*len(segment_instructions)
         if any(d is not None and (type(d) is not int or not 3<=d<=10) for d in durations):
             return json.dumps({'error':'Ogni clip con primo e ultimo frame dura 3–10 secondi.'})
@@ -28,6 +31,8 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                  'frame_asset_ids':frame_asset_ids,'segments':[{'instruction':s,'duration':d}
                      for s,d in zip(segment_instructions,durations)],
                  'resolution':resolution,'aspect_ratio':aspect_ratio}
+        if open_ending:
+            payload['open_ending'] = True
         try:
             result=call_backend_agent_endpoint('/agent/create-sequence',payload,
                 user_id=user_id,project_context_token=project_context_token)

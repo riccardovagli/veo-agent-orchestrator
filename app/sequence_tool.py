@@ -2,6 +2,50 @@
 import json
 
 def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoint):
+    def sequence_call(endpoint,project_id,user_id,token,payload):
+        error=validate_graph_request(project_id,user_id,token)
+        if error:
+            return {'error':str(error)}
+        try:
+            return call_backend_agent_endpoint(endpoint,{'project_id':project_id,**payload},
+                                               user_id=user_id,project_context_token=token)
+        except Exception as error:
+            from app.backend_errors import BackendAgentError
+            if isinstance(error,BackendAgentError):
+                return error.result()
+            return {'error':'Esito della richiesta non confermato.', 'uncertain':True}
+
+    @mcp.tool()
+    async def inspect_omni_sequence(project_id:str,user_id:str,project_context_token:str,
+                                    job_id:str | None=None) -> str:
+        """List recent project sequences, or read a specific sequence and its numbered clips."""
+        return json.dumps(sequence_call('/agent/sequence-jobs',project_id,user_id,
+                                        project_context_token,{'job_id':job_id}),ensure_ascii=False)
+
+    @mcp.tool()
+    async def revise_omni_sequence(project_id:str,user_id:str,project_context_token:str,
+                                   job_id:str, prompts:dict[str,str] | None=None,
+                                   frames:dict[str,str] | None=None,
+                                   replacements:dict[str,str] | None=None) -> str:
+        """Revise an identified sequence. Keys are one-based clip/frame numbers as strings.
+        prompts supplies clip instructions, frames supplies verified new image UUIDs for
+        boundaries, replacements supplies completed video job IDs. For stopped plans
+        supply prompts for the failed clips. Unchanged clips are reused by the backend.
+        """
+        result=sequence_call('/agent/revise-sequence',project_id,user_id,project_context_token,
+                             {'job_id':job_id,'revision':{'prompts':prompts or {},
+                                                         'frames':frames or {},
+                                                         'replacements':replacements or {}}})
+        if 'error' in result:
+            return json.dumps(result,ensure_ascii=False)
+        if not result.get('jobId') or result.get('status')=='UNKNOWN':
+            return json.dumps({'error':'Pianificazione del montaggio non confermata.',
+                               'job_id':result.get('jobId'),'uncertain':True},ensure_ascii=False)
+        return json.dumps({'action':'omni_video_started','generation_type':'sequence',
+                           'job_id':result['jobId'],'node_id':result.get('nodeId'),
+                           'status':result.get('status','PROCESSING'),
+                           'message':'Revisione avviata. Le clip confermate vengono riusate.'},ensure_ascii=False)
+
     @mcp.tool()
     async def start_omni_sequence(project_id:str,user_id:str,project_context_token:str,
             request_id:str,original_instruction:str,frame_asset_ids:list[str],

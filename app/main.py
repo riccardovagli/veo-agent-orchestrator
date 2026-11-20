@@ -119,6 +119,7 @@ async def prepare_visual_asset_zoom_out(
     asset_id: str | None = None, request_id: str | None = None,
     aspect_ratio: str | None = None,
     image_size: Literal["2K", "4K"] | None = None,
+    image_model: Literal["seedream-5.5"] | None = None,
 ) -> dict:
     """Generate a wider framing with Nano Banana 2.1 from one original image.
 
@@ -139,6 +140,7 @@ async def prepare_visual_asset_zoom_out(
         project_id, user_id, project_context_token, node_id, asset_index,
         scale_factor, instruction, variant, mode, asset_id, request_id, aspect_ratio,
         image_size=image_size,
+        image_model=image_model,
     )
         
 
@@ -699,6 +701,7 @@ async def prepare_visual_asset_generation(
     asset_type: str, image_prompt: str, aspect_ratio: str = "16:9",
     model_version: str = "2.1", request_id: str | None = None,
     image_size: Literal["2K", "4K"] | None = None,
+    image_model: Literal["seedream-5.5"] | None = None,
 ) -> dict:
     """Start a real Nano Banana 2.1 image job, then respond to the user.
 
@@ -713,6 +716,7 @@ async def prepare_visual_asset_generation(
         project_id, user_id, project_context_token, node_id, asset_type,
         image_prompt, aspect_ratio, model_version, request_id,
         image_size=image_size,
+        image_model=image_model,
     )
 
 
@@ -724,6 +728,7 @@ async def prepare_visual_asset_edit(
     variant: str | None = None, asset_id: str | None = None,
     request_id: str | None = None,
     image_size: Literal["2K", "4K"] | None = None,
+    image_model: Literal["seedream-5.5"] | None = None,
 ) -> dict:
     """Start editing exactly one existing project image, then respond immediately.
 
@@ -740,6 +745,7 @@ async def prepare_visual_asset_edit(
         project_id, user_id, project_context_token, node_id, asset_index,
         instruction, aspect_ratio, variant, asset_id, request_id,
         image_size=image_size,
+        image_model=image_model,
     )
 
 
@@ -751,6 +757,7 @@ async def prepare_visual_asset_composition(
     node_id: str | None = None, variant: str | None = None,
     asset_ids: list[str] | None = None, request_id: str | None = None,
     image_size: Literal["2K", "4K"] | None = None,
+    image_model: Literal["seedream-5.5"] | None = None,
 ) -> dict:
     """Compose 2 to 14 distinct project images with Nano Banana 2.1.
 
@@ -768,6 +775,7 @@ async def prepare_visual_asset_composition(
         project_id, user_id, project_context_token, asset_node_ids, asset_indexes,
         instruction, aspect_ratio, node_id, variant, asset_ids, request_id,
         image_size=image_size,
+        image_model=image_model,
     )
 
 

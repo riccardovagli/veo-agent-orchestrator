@@ -104,12 +104,36 @@ def register_stanley_tools(mcp, get_db, validate_graph_request):
 
     @mcp.tool()
     async def apply_stanley_node_patch(project_id: str, user_id: str, project_context_token: str,
-                                       node_id: str, node_type: str, content: str,
-                                       depends_on: list[str], expected_revision: str,
-                                       request_id: str) -> dict:
-        """Save one user-agreed narrative node, preserving production metadata.
-        Read current graph_revision first; stale writes return conflict without changes.
+                                       node_id: str = '', node_type: str = '', content: str = '',
+                                       depends_on: list[str] | None = None, expected_revision: str = '',
+                                       request_id: str = '', patches: list[dict] | None = None) -> dict:
+        """Save narrative nodes atomically, preserving production metadata.
+
+        For multiple nodes pass patches, a list of objects with node_id,
+        node_type, content and depends_on. Dependencies may reference other
+        entries in the same batch. For one node use the original named fields.
+        Pass expected_revision from one graph read. A batch counts as one
+        graph update in the production plan. A conflict writes nothing.
         """
+        if patches is None:
+            entries = [{'node_id':node_id, 'node_type':node_type, 'content':content,
+                        'depends_on':[] if depends_on is None else depends_on}]
+        elif node_id or node_type or content or depends_on is not None:
+            return {'error':'Usa patches oppure i campi del singolo nodo.'}
+        else:
+            entries = patches
+        if not entries:
+            return {'error':'Indica almeno un nodo per scrittura.'}
+        seen = set()
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {'node_id', 'node_type', 'content', 'depends_on'}:
+                return {'error':'Ogni nodo richiede node_id, node_type, content e depends_on.'}
+            identifier = entry['node_id']
+            deps = entry['depends_on']
+            if (not isinstance(identifier, str) or identifier in seen
+                    or not isinstance(deps, list) or any(not isinstance(dep, str) for dep in deps)):
+                return {'error':'ID duplicato o dipendenze non valide.'}
+            seen.add(identifier)
         error = await asyncio.to_thread(validate_graph_request, project_id, user_id, project_context_token)
         if error:
             return {'error':str(error)}
@@ -132,12 +156,21 @@ def register_stanley_tools(mcp, get_db, validate_graph_request):
                 if revision != expected_revision:
                     return {'error':'graph_conflict', 'message':'Il grafo è cambiato: rileggi prima di aggiornare.'}
                 nodes = deepcopy((snap.to_dict() or {}).get('graph_nodes') or {})
-                validate_patch(node_id, node_type, content, depends_on, nodes)
-                old = nodes.get(node_id) or {}
-                nodes[node_id] = {**old, 'type':node_type, 'content':content.strip(),
-                                  'depends_on':depends_on, 'status':old.get('status', 'VALID'),
+                saved = []
+                for entry in entries:
+                    key = entry['node_id']
+                    previous = nodes.get(key) or {}
+                    nodes[key] = {**previous, 'type':entry['node_type'],
+                                  'content':entry['content'], 'depends_on':entry['depends_on'],
+                                  'status':previous.get('status', 'VALID'),
                                   'last_updated':firestore.SERVER_TIMESTAMP, 'updated_by':user_id}
-                result = {'saved':True, 'node_id':node_id, 'node_type':node_type}
+                    saved.append({'node_id':key, 'node_type':entry['node_type']})
+                for entry in entries:
+                    validate_patch(entry['node_id'], entry['node_type'], entry['content'],
+                                   entry['depends_on'], nodes)
+                    nodes[entry['node_id']]['content'] = entry['content'].strip()
+                result = ({'saved':True, **saved[0]} if patches is None
+                          else {'saved':True, 'nodes':saved})
                 tx.set(ref, {'graph_nodes':nodes}, merge=True)
                 tx.create(receipt_ref, {'result':result, 'created_at':firestore.SERVER_TIMESTAMP})
                 return result

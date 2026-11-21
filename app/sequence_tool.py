@@ -40,14 +40,37 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
 
     @mcp.tool()
     async def revise_omni_sequence(project_id:str,user_id:str,project_context_token:str,
-                                   job_id:str, prompts:dict[str,str] | None=None,
+                                   job_id:str, prompts:dict[str,object] | None=None,
                                    frames:dict[str,str] | None=None,
                                    replacements:dict[str,str] | None=None) -> str:
         """Revise an identified sequence. Keys are one-based clip/frame numbers as strings.
-        prompts supplies clip instructions, frames supplies verified new image UUIDs for
+        Pass a flat map for prompts, e.g. {"2": "Nuovo prompt della clip 2"}.
+        Use only clip numbers as keys. Frames supplies verified new image UUIDs for
         boundaries, replacements supplies completed video job IDs. For stopped plans
         supply prompts for the failed clips. Unchanged clips are reused by the backend.
         """
+        if prompts is not None and 'prompts' in prompts and prompts.keys() <= {'prompts', 'count'}:
+            nested = prompts['prompts']
+            if isinstance(nested, str):
+                try:
+                    nested = json.loads(nested)
+                except ValueError:
+                    nested = None
+            count = prompts.get('count')
+            if isinstance(nested, dict) and (
+                'count' not in prompts or type(count) in (int, str) and str(count) == str(len(nested))
+            ):
+                prompts = nested
+        for field, mapping in (('prompts', prompts), ('frames', frames), ('replacements', replacements)):
+            if mapping is not None and any(
+                not key.isascii() or not key.isdecimal() or key.startswith('0')
+                or not isinstance(value, str) or not value.strip()
+                for key, value in mapping.items()
+            ):
+                return json.dumps({
+                    'error': f'{field}: usa una mappa piatta con numeri da 1 e valori testuali.',
+                    'submitted': False,
+                }, ensure_ascii=False)
         result=sequence_call('/agent/revise-sequence',project_id,user_id,project_context_token,
                              {'job_id':job_id,'revision':{'prompts':prompts or {},
                                                          'frames':frames or {},

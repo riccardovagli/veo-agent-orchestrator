@@ -89,6 +89,29 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         if scene_clips is not None:
             if frame_asset_ids or segment_instructions or segment_durations or open_ending:
                 return json.dumps({'error':'Per la scena specifica gli input dentro ciascuna clip.'})
+            for index, clip in enumerate(scene_clips):
+                first = clip.get('first_frame_asset_id')
+                last = clip.get('last_frame_asset_id')
+                refs = clip.get('reference_asset_ids')
+                number = index + 1
+                if last and not first:
+                    problem = f'Clip {number}: manca il primo frame per usare l’ultimo frame.'
+                elif first and refs:
+                    problem = f'Clip {number}: scegli tra riferimenti e modalità con frame.'
+                elif not first and not refs:
+                    problem = f'Clip {number}: mancano riferimenti o primo frame.'
+                elif clip.get('join') == 'continuous' and (
+                    index == 0 or not first or first != scene_clips[index - 1].get('last_frame_asset_id')
+                ):
+                    problem = (
+                        f'Clip {number}: un raccordo continuo richiede una clip precedente.'
+                        if index == 0 else
+                        f'Clip {number - 1} → {number}: assegna lo stesso asset verificato '
+                        'come ultimo frame della prima clip e primo frame della seconda.'
+                    )
+                else:
+                    continue
+                return json.dumps({'error': problem, 'submitted': False}, ensure_ascii=False)
             payload = {'project_id':project_id,'request_id':request_id,'original_instruction':original_instruction,
                        'resolution':resolution,'aspect_ratio':aspect_ratio,'scene':True,
                        'total_duration':total_duration,'segments':scene_clips}

@@ -14,6 +14,11 @@ class SceneClip(TypedDict, total=False):
     join: Literal['cut', 'continuous']
 
 
+class ClipPromptEdit(TypedDict):
+    clip_number: int
+    new_prompt: str
+
+
 def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoint):
     def sequence_call(endpoint,project_id,user_id,token,payload):
         error=validate_graph_request(project_id,user_id,token)
@@ -33,6 +38,11 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                                     job_id:str | None=None, capabilities_only:bool=False) -> str:
         """List sequences, inspect one by job ID, or read current OMNI clip duration limits.
         To plan a new scene, use capabilities_only=True without a job ID.
+        For retry status, use next_retry or follow retry_job_id to the latest
+        attempt. Report every requested clip: included_in_retry=true means it
+        was scheduled in that attempt (see status for its outcome); false
+        means the existing clip was reused. If retry_job_id is absent, the
+        original job alone does not confirm a newer attempt. This is read-only.
         """
         return json.dumps(sequence_call('/agent/sequence-jobs',project_id,user_id,
                                         project_context_token,
@@ -41,9 +51,13 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
     @mcp.tool()
     async def revise_omni_sequence(project_id:str,user_id:str,project_context_token:str,
                                    job_id:str, prompts:dict[str,object] | None=None,
+                                   clip_prompts:list[ClipPromptEdit] | None=None,
                                    frames:dict[str,str] | None=None,
                                    replacements:dict[str,str] | None=None) -> str:
         """Revise an identified sequence. Keys are one-based clip/frame numbers as strings.
+        For multiple clips use clip_prompts as a list of items, each with
+        clip_number and new_prompt. Omit prompts and any single-clip arguments
+        when using clip_prompts.
         Pass a flat map for prompts, e.g. {"2": "Nuovo prompt della clip 2"}.
         Use only clip numbers as keys. Frames supplies verified new image UUIDs for
         boundaries, replacements supplies completed video job IDs. For stopped plans
@@ -71,6 +85,22 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                     'error': f'{field}: usa una mappa piatta con numeri da 1 e valori testuali.',
                     'submitted': False,
                 }, ensure_ascii=False)
+        if clip_prompts is not None:
+            if not clip_prompts or prompts:
+                return json.dumps({
+                    'error': 'Indica un elenco di clip, senza altri argomenti per i prompt.',
+                    'submitted': False,
+                }, ensure_ascii=False)
+            prompts = {}
+            for edit in clip_prompts:
+                number = edit['clip_number']
+                prompt = edit['new_prompt']
+                if type(number) is not int or number < 1 or str(number) in prompts or not prompt.strip():
+                    return json.dumps({
+                        'error': 'Ogni clip deve avere un numero univoco da 1 e un prompt non vuoto.',
+                        'submitted': False,
+                    }, ensure_ascii=False)
+                prompts[str(number)] = prompt
         result=sequence_call('/agent/revise-sequence',project_id,user_id,project_context_token,
                              {'job_id':job_id,'revision':{'prompts':prompts or {},
                                                          'frames':frames or {},

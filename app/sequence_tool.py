@@ -1,8 +1,18 @@
 """One complete sequence plan per submission; no generation or waiting in MCP."""
 import json
+import re
 
 from typing import Literal
 from typing_extensions import TypedDict
+
+
+def explicitly_requests_h3_lite(instruction):
+    # Match a positive request. Comparisons and mentions alone are ambiguous.
+    return re.search(
+        r"\b(?:con|usando|usa|utilizza|using|use|with)\s+"
+        r"(?:il modello\s+)?(?:minimax[\s-]+)?h3[\s-]+lite\b",
+        instruction, flags=re.IGNORECASE,
+    ) is not None
 
 
 class SceneClip(TypedDict, total=False):
@@ -139,6 +149,13 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         if error:return json.dumps({'error':str(error)},ensure_ascii=False)
         if not resolution or not aspect_ratio:
             return json.dumps({'error':'Indica risoluzione e formato del progetto.'})
+        if explicitly_requests_h3_lite(original_instruction) and not any(
+            clip.get('video_model') == 'minimax-h3-lite' for clip in (scene_clips or [])
+        ):
+            return json.dumps({
+                'error': ('Hai richiesto MiniMax H3 Lite. Imposta video_model=minimax-h3-lite '
+                          'nelle scene_clips interessate e verifica che il modello sia disponibile.'),
+            }, ensure_ascii=False)
         if scene_clips is not None:
             if frame_asset_ids or segment_instructions or segment_durations or open_ending:
                 return json.dumps({'error':'Per la scena specifica gli input dentro ciascuna clip.'})

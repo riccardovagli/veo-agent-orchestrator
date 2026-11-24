@@ -132,11 +132,14 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
             segment_instructions:list[str] | None=None,resolution:str='',
             aspect_ratio:str='',segment_durations:list[int | None] | None=None,
             open_ending:bool=False,scene_clips:list[SceneClip] | None=None,
-            total_duration:int | None=None) -> str:
+            total_duration:int | None=None,
+            h3_lite_source_job_id:str | None=None) -> str:
         """Produce one final video from 1–13 scene clips, or 2–13 ordered-frame clips. Counts as one video job.
         For a continuous plan, supply ordered frame_asset_ids and segment_instructions.
         With open_ending=True add a final prompt for the last frame with a free ending.
         Legacy clip durations are 3–10 seconds or None (automatic).
+        To rerender a saved scene with H3 Lite, supply h3_lite_source_job_id,
+        resolution and aspect_ratio. The saved clip joins are preserved.
         For a scene, supply scene_clips and total_duration in seconds. Each clip has
         instruction and duration. Frame and reference IDs are verified project asset UUIDs.
         Consult inspect_omni_sequence(capabilities_only=True) for allowed input modes and
@@ -147,6 +150,19 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         """
         error=validate_graph_request(project_id,user_id,project_context_token)
         if error:return json.dumps({'error':str(error)},ensure_ascii=False)
+        if h3_lite_source_job_id:
+            if (scene_clips is not None or total_duration is not None or frame_asset_ids
+                    or segment_instructions or segment_durations or open_ending):
+                return json.dumps({'error':'Fornisci il job sorgente senza ricostruire il piano.'})
+            saved = sequence_call('/agent/sequence-jobs', project_id, user_id, project_context_token,
+                                  {'job_id':h3_lite_source_job_id, 'capabilities_only':False})
+            if 'error' in saved:
+                return json.dumps(saved, ensure_ascii=False)
+            clips = saved.get('scene_clips')
+            if not clips:
+                return json.dumps({'error':'Il job sorgente non contiene un piano scene_clips.'})
+            scene_clips = [{**clip, 'video_model':'minimax-h3-lite'} for clip in clips]
+            total_duration = sum(clip['duration'] for clip in scene_clips)
         if not resolution or not aspect_ratio:
             return json.dumps({'error':'Indica risoluzione e formato del progetto.'})
         if explicitly_requests_h3_lite(original_instruction) and not any(

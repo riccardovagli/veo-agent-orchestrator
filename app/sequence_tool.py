@@ -182,9 +182,14 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                 else:
                     continue
                 return json.dumps({'error': problem, 'submitted': False}, ensure_ascii=False)
+            segments = list(scene_clips)
+            if segments:
+                # The first clip has no incoming transition.
+                segments[0] = dict(segments[0])
+                segments[0].pop('join', None)
             payload = {'project_id':project_id,'request_id':request_id,'original_instruction':original_instruction,
                        'resolution':resolution,'aspect_ratio':aspect_ratio,'scene':True,
-                       'total_duration':total_duration,'segments':scene_clips}
+                       'total_duration':total_duration,'segments':segments}
         else:
             frame_asset_ids = frame_asset_ids or []
             segment_instructions = segment_instructions or []

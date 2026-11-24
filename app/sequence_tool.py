@@ -6,6 +6,7 @@ from typing_extensions import TypedDict
 
 
 class SceneClip(TypedDict, total=False):
+    video_model: str
     instruction: str
     duration: int
     first_frame_asset_id: str
@@ -122,15 +123,14 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
             aspect_ratio:str='',segment_durations:list[int | None] | None=None,
             open_ending:bool=False,scene_clips:list[SceneClip] | None=None,
             total_duration:int | None=None) -> str:
-        """Produce one final video from 2–13 clips. Counts as one video job.
+        """Produce one final video from 1–13 scene clips, or 2–13 ordered-frame clips. Counts as one video job.
         For a continuous plan, supply ordered frame_asset_ids and segment_instructions.
         With open_ending=True add a final prompt for the last frame with a free ending.
         Legacy clip durations are 3–10 seconds or None (automatic).
         For a scene, supply scene_clips and total_duration in seconds. Each clip has
-        instruction, duration, and either reference_asset_ids (1–10), first_frame_asset_id,
-        or first_frame_asset_id plus last_frame_asset_id (max 10 seconds). Frame and
-        reference IDs are verified project asset UUIDs. Other limits follow the active
-        OMNI profile. Each clip after the first has join='cut' or join='continuous'
+        instruction and duration. Frame and reference IDs are verified project asset UUIDs.
+        Consult inspect_omni_sequence(capabilities_only=True) for allowed input modes and
+        limits. Set video_model only for a model explicitly requested by the user. Each clip after the first has join='cut' or join='continuous'
         with the previous last frame as its first. Supply the project resolution and
         aspect ratio (or user overrides) for the entire scene. Submit the full plan
         once and return the parent receipt. Rendering and assembly are asynchronous.

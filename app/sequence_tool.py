@@ -46,15 +46,24 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
 
     @mcp.tool()
     async def inspect_omni_sequence(project_id:str,user_id:str,project_context_token:str,
-                                    job_id:str | None=None, capabilities_only:bool=False) -> str:
+                                    job_id:str | None=None, capabilities_only:bool=False,
+                                    recover_replicate_clip_number:int | None=None) -> str:
         """List sequences, inspect one by job ID, or read current OMNI clip duration limits.
         To plan a new scene, use capabilities_only=True without a job ID.
+        To recover an existing Replicate result after worker interruption, pass the
+        scene job_id and recover_replicate_clip_number. This does not render a new clip.
         For retry status, use next_retry or follow retry_job_id to the latest
         attempt. Report every requested clip: included_in_retry=true means it
         was scheduled in that attempt (see status for its outcome); false
         means the existing clip was reused. If retry_job_id is absent, the
         original job alone does not confirm a newer attempt. This is read-only.
         """
+        if recover_replicate_clip_number is not None:
+            if not job_id or capabilities_only:
+                return json.dumps({'error':'Indica il job della scena e la clip da recuperare.'})
+            return json.dumps(sequence_call('/agent/recover-replicate-clip',project_id,user_id,
+                                            project_context_token,{'job_id':job_id,
+                                            'clip_number':recover_replicate_clip_number}),ensure_ascii=False)
         return json.dumps(sequence_call('/agent/sequence-jobs',project_id,user_id,
                                         project_context_token,
                                         {'job_id':job_id,'capabilities_only':capabilities_only}),ensure_ascii=False)

@@ -73,7 +73,8 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                                    job_id:str, prompts:dict[str,object] | None=None,
                                    clip_prompts:list[ClipPromptEdit] | None=None,
                                    frames:dict[str,str] | None=None,
-                                   replacements:dict[str,str] | None=None) -> str:
+                                   replacements:dict[str,str] | None=None,
+                                   retry_clip_number:int | None=None) -> str:
         """Revise an identified sequence. Keys are one-based clip/frame numbers as strings.
         For multiple clips use clip_prompts as a list of items, each with
         clip_number and new_prompt. Omit prompts and any single-clip arguments
@@ -82,7 +83,26 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         Use only clip numbers as keys. Frames supplies verified new image UUIDs for
         boundaries, replacements supplies completed video job IDs. For stopped plans
         supply prompts for the failed clips. Unchanged clips are reused by the backend.
+        For a stopped sequence, retry one failed clip with retry_clip_number and job_id.
+        Omit prompts, frames and replacements to reuse the saved clip plan.
         """
+        if retry_clip_number is not None:
+            if (type(retry_clip_number) is not int or not 1 <= retry_clip_number <= 13
+                    or prompts or frames or replacements):
+                return json.dumps({'error':'Indica solo il numero della clip da riprovare.',
+                                   'submitted':False},ensure_ascii=False)
+            result=sequence_call('/agent/revise-sequence',project_id,user_id,project_context_token,
+                                 {'job_id':job_id,'revision':{'retry_clip_number':retry_clip_number}})
+            if 'error' in result:
+                return json.dumps(result,ensure_ascii=False)
+            if not result.get('jobId') or result.get('status')=='UNKNOWN':
+                return json.dumps({'error':'Retry non confermato.','uncertain':True,
+                                   'job_id':result.get('jobId')},ensure_ascii=False)
+            return json.dumps({'action':'omni_video_started',
+                               'generation_type':'scene' if result.get('scene') else 'sequence',
+                               'job_id':result['jobId'],'node_id':result.get('nodeId'),
+                               'status':result.get('status','PROCESSING'),
+                               'message':'Rigenerazione selettiva avviata.'},ensure_ascii=False)
         if prompts is not None and 'prompts' in prompts and prompts.keys() <= {'prompts', 'count'}:
             nested = prompts['prompts']
             if isinstance(nested, str):

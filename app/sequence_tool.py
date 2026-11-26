@@ -211,7 +211,7 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                 number = index + 1
                 if last and not first:
                     problem = f'Clip {number}: manca il primo frame per usare l’ultimo frame.'
-                elif first and refs:
+                elif first and refs and clip.get('video_model') != 'minimax-h3-lite':
                     problem = f'Clip {number}: scegli tra riferimenti e modalità con frame.'
                 elif not first and not refs:
                     problem = f'Clip {number}: mancano riferimenti o primo frame.'

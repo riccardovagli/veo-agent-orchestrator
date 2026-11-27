@@ -6,6 +6,13 @@ from typing import Literal
 from typing_extensions import TypedDict
 
 
+_INTERNAL_ASSET_REFERENCE = re.compile(
+    r'(?<![0-9a-z])[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?![0-9a-z])'
+    r'|[·•]\s*asset\s*#?\d+\b',
+    re.IGNORECASE,
+)
+
+
 def explicitly_requests_h3_lite(instruction):
     # Match a positive request. Comparisons and mentions alone are ambiguous.
     return re.search(
@@ -205,6 +212,13 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
             if frame_asset_ids or segment_instructions or segment_durations or open_ending:
                 return json.dumps({'error':'Per la scena specifica gli input dentro ciascuna clip.'})
             for index, clip in enumerate(scene_clips):
+                instruction = clip.get('instruction') or ''
+                if _INTERNAL_ASSET_REFERENCE.search(instruction):
+                    return json.dumps({
+                        'code': 'VIDEO_PROMPT_INTERNAL_REFERENCE',
+                        'error': f'Clip {index + 1}: il prompt contiene un identificativo interno. Usa nel testo il ruolo delle immagini e passa gli ID nei campi degli asset.',
+                        'submitted': False,
+                    }, ensure_ascii=False)
                 first = clip.get('first_frame_asset_id')
                 last = clip.get('last_frame_asset_id')
                 refs = clip.get('reference_asset_ids')
@@ -238,6 +252,13 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         else:
             frame_asset_ids = frame_asset_ids or []
             segment_instructions = segment_instructions or []
+            for number, instruction in enumerate(segment_instructions, 1):
+                if _INTERNAL_ASSET_REFERENCE.search(instruction):
+                    return json.dumps({
+                        'code': 'VIDEO_PROMPT_INTERNAL_REFERENCE',
+                        'error': f'Clip {number}: il prompt contiene un identificativo interno. Usa nel testo il ruolo delle immagini e passa gli ID nei campi degli asset.',
+                        'submitted': False,
+                    }, ensure_ascii=False)
             expected = len(frame_asset_ids) - (0 if open_ending else 1)
             if (not 2<=expected<=13 or len(frame_asset_ids)>14 or len(segment_instructions)!=expected
                     or (segment_durations is not None and len(segment_durations)!=len(segment_instructions))):

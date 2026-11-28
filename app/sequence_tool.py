@@ -81,11 +81,16 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
                                    clip_prompts:list[ClipPromptEdit] | None=None,
                                    frames:dict[str,str] | None=None,
                                    replacements:dict[str,str] | None=None,
-                                   retry_clip_number:int | None=None) -> str:
+                                   retry_clip_number:int | None=None,
+                                   replacement_clip_number:int | None=None,
+                                   replacement_video_job_id:str | None=None) -> str:
         """Revise an identified sequence. Keys are one-based clip/frame numbers as strings.
         For multiple clips use clip_prompts as a list of items, each with
         clip_number and new_prompt. Omit prompts and any single-clip arguments
         when using clip_prompts.
+        To mount one completed clip, pass job_id (destination sequence),
+        replacement_clip_number (one-based position), and replacement_video_job_id
+        (source video job ID). Omit all other revision arguments.
         Pass a flat map for prompts, e.g. {"2": "Nuovo prompt della clip 2"}.
         Use only clip numbers as keys. Frames supplies verified new image UUIDs for
         boundaries, replacements supplies completed video job IDs.
@@ -97,6 +102,17 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         For a stopped sequence, retry one failed clip with retry_clip_number and job_id.
         Omit prompts, frames and replacements to reuse the saved clip plan.
         """
+        if replacement_clip_number is not None or replacement_video_job_id is not None:
+            if (type(replacement_clip_number) is not int or not 1 <= replacement_clip_number <= 13
+                    or not isinstance(replacement_video_job_id, str)
+                    or not replacement_video_job_id.strip()
+                    or any(value is not None for value in
+                           (prompts, clip_prompts, frames, replacements, retry_clip_number))):
+                return json.dumps({
+                    'error': 'Per montare la clip indica solo la posizione e il job ID del video pronto.',
+                    'submitted': False,
+                }, ensure_ascii=False)
+            replacements = {str(replacement_clip_number): replacement_video_job_id.strip()}
         if retry_clip_number is not None:
             if (type(retry_clip_number) is not int or not 1 <= retry_clip_number <= 13
                     or prompts or frames or replacements):

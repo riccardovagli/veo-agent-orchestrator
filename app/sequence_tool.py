@@ -88,7 +88,11 @@ def register_sequence_tool(mcp,validate_graph_request,call_backend_agent_endpoin
         when using clip_prompts.
         Pass a flat map for prompts, e.g. {"2": "Nuovo prompt della clip 2"}.
         Use only clip numbers as keys. Frames supplies verified new image UUIDs for
-        boundaries, replacements supplies completed video job IDs. For stopped plans
+        boundaries, replacements supplies completed video job IDs.
+        For a request to mount an already completed clip, supply only job_id
+        and replacements (e.g. {"2": "completed standalone video job ID"}).
+        Omit prompts, clip_prompts, frames and retry_clip_number for assembly.
+        This reuses the other clips and creates a new revision without rendering clips. For stopped plans
         supply prompts for the failed clips. Unchanged clips are reused by the backend.
         For a stopped sequence, retry one failed clip with retry_clip_number and job_id.
         Omit prompts, frames and replacements to reuse the saved clip plan.
